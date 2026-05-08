@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block title %}Акти — DocketPro CRM{% endblock %}
+
+{% block page_title %}Акти{% endblock %}
+{% block page_sub %}{{ acts|length }} записів · {{ status or 'всі статуси' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/acts/export?status={{ status }}&client={{ client }}&q={{ q }}"
+     class="btn btn-secondary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+    Excel
+  </a>
+  <a href="/acts/new" class="btn btn-primary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    Новий акт
+  </a>
+{% endblock %}
+
+{% block content %}
+
+{% macro act_pill(item) %}
+  {% set s = item.status %}
+  {% if s == 'Підписано' %}<span class="pill pill-success">Підписано</span>
+  {% elif s == 'Скасовано' %}<span class="pill pill-mute">Скасовано</span>
+  {% elif s == 'Направлений' %}<span class="pill pill-warning">Направлений · {{ item.days }} дн.</span>
+  {% else %}<span class="pill pill-info">Чернетка</span>{% endif %}
+{% endmacro %}
+
+<div class="page-card">
+
+  {# ── Status tabs ─────────────────────────────────────────────── #}
+  {% set cnt = namespace(draft=0, sent=0, signed=0, cancelled=0) %}
+  {% for item in acts %}
+    {% if item.status == 'Чернетка' %}{% set cnt.draft = cnt.draft + 1 %}
+    {% elif item.status == 'Направлений' %}{% set cnt.sent = cnt.sent + 1 %}
+    {% elif item.status == 'Підписано' %}{% set cnt.signed = cnt.signed + 1 %}
+    {% elif item.status == 'Скасовано' %}{% set cnt.cancelled = cnt.cancelled + 1 %}{% endif %}
+  {% endfor %}
+
+  <div class="status-tabs" id="act-tabs">
+    <button class="status-tab active" onclick="filterActs('all', this)">
+      Всі <span class="tab-count">{{ acts|length }}</span>
+    </button>
+    <button class="status-tab" onclick="filterActs('draft', this)">
+      Чернетка <span class="tab-count">{{ cnt.draft }}</span>
+    </button>
+    <button class="status-tab" onclick="filterActs('sent', this)">
+      Направлені <span class="tab-count">{{ cnt.sent }}</span>
+    </button>
+    <button class="status-tab" onclick="filterActs('signed', this)">
+      Підписано <span class="tab-count">{{ cnt.signed }}</span>
+    </button>
+    <button class="status-tab" onclick="filterActs('cancelled', this)">
+      Скасовано <span class="tab-count">{{ cnt.cancelled }}</span>
+    </button>
+  </div>
+
+  {# ── Toolbar ─────────────────────────────────────────────────── #}
+  <form method="get">
+    <div class="toolbar">
+      <div class="toolbar-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-mute)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+        <input type="text" name="q" value="{{ q }}" placeholder="№ акту або клієнт..."
+               oninput="liveSearchActs(this)"/>
+      </div>
+      <select name="client" onchange="this.form.submit()">
+        <option value="">Всі клієнти</option>
+        {% for cn in clients %}
+        <option value="{{ cn }}" {% if cn == client %}selected{% endif %}>{{ cn }}</option>
+        {% endfor %}
+      </select>
+      <div class="toolbar-spacer"></div>
+      {% if status or client or q %}
+      <a href="/acts" class="btn btn-ghost btn-sm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        Скинути
+      </a>
+      {% endif %}
+    </div>
+  </form>
+
+  {# ── Table ───────────────────────────────────────────────────── #}
+  {% if acts %}
+  <table class="tbl" id="acts-table">
+    <thead>
+      <tr>
+        <th style="width:170px">Акт №</th>
+        <th>Клієнт</th>
+        <th style="width:95px">Дата</th>
+        <th style="width:155px">Рахунок</th>
+        <th class="num" style="width:130px">Сума, грн</th>
+        <th style="width:155px;text-align:center">Статус</th>
+        <th style="width:160px;text-align:right">Дії</th>
+      </tr>
+    </thead>
+    <tbody data-filterable>
+    {% for item in acts %}
+    {% set r = item.row %}
+    {% if item.status == 'Підписано' %}{% set ds = 'signed' %}
+    {% elif item.status == 'Скасовано' %}{% set ds = 'cancelled' %}
+    {% elif item.status == 'Направлений' %}{% set ds = 'sent' %}
+    {% else %}{% set ds = 'draft' %}{% endif %}
+    <tr data-status="{{ ds }}"
+        class="clickable"
+        onclick="openActDrawer(this)"
+        data-act='{{ {
+          "no": r.act_no,
+          "client": r.client_name,
+          "date": r.act_date or "",
+          "period_from": r.period_from or "",
+          "period_to": r.period_to or "",
+          "sum": r.sum_uah,
+          "status": item.status,
+          "invoice": r.invoice_no or "",
+          "contract": r.contract_no or "",
+          "pdf": pdf_url(r.pdf_path) if r.pdf_path else "",
+          "days": item.days | default(0),
+          "email_sent_date": item.email_sent_date,
+          "client_email": item.client_email
+        } | tojson }}'>
+      <td class="mono" style="font-size:12px">{{ r.act_no }}</td>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.client_name }}</td>
+      <td style="font-size:12px;color:var(--text-mute);white-space:nowrap">{{ r.act_date or '—' }}</td>
+      <td class="mono" style="font-size:11.5px;color:var(--text-mute)">{{ r.invoice_no or '—' }}</td>
+      <td class="num">₴{{ fmt_money(r.sum_uah) }}</td>
+      <td style="text-align:center">{{ act_pill(item) }}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="actions">
+          {% set s = item.status %}
+          {% if s not in ('Підписано','Скасовано') %}
+            {% if s != 'Направлений' %}
+            <form method="post" action="/acts/{{ r.act_no }}/send">
+              <button class="btn btn-sm btn-ghost" style="color:var(--info-fg)" title="Направити">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
+              </button>
+            </form>
+            {% endif %}
+            <form method="post" action="/acts/{{ r.act_no }}/sign">
+              <button class="btn btn-sm btn-ghost" style="color:var(--success-fg)" title="Підписано">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg>
+              </button>
+            </form>
+          {% endif %}
+          <a href="/acts/{{ r.act_no }}/edit" class="btn btn-sm btn-ghost" title="Редагувати" onclick="event.stopPropagation()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </a>
+          <a href="/acts/{{ r.act_no }}/preview" class="btn btn-sm btn-ghost" title="Переглянути документ" onclick="event.stopPropagation()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+          </a>
+          {% if r.pdf_path %}
+          <a href="{{ pdf_url(r.pdf_path) }}" target="_blank" class="btn btn-sm btn-ghost" title="PDF" onclick="event.stopPropagation()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          </a>
+          <form method="post" action="/acts/{{ r.act_no }}/send-email"
+                onsubmit="event.stopPropagation(); return confirm('Надіслати акт {{ r.act_no }} на email клієнта?{% if item.email_sent_date %}\n(вже відправлявся {{ item.email_sent_date }}){% endif %}')">
+            <button type="submit" class="btn btn-sm btn-ghost"
+                    title="{% if item.email_sent_date %}Відправлено {{ item.email_sent_date }}{% elif item.client_email %}Надіслати акт на {{ item.client_email }}{% else %}У клієнта не вказано email{% endif %}"
+                    style="color:{% if item.email_sent_date %}var(--success-fg){% elif item.client_email %}var(--accent-fg){% else %}var(--border-strong){% endif %}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>
+              </svg>
+            </button>
+          </form>
+          {% endif %}
+          <form method="post" action="/acts/{{ r.act_no }}/delete"
+                onsubmit="event.stopPropagation(); return confirm('Видалити {{ r.act_no }}?')">
+            <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger-fg)" title="Видалити">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <span class="pg-info">Всього: {{ acts|length }}</span>
+  </div>
+
+  {% else %}
+  <div class="empty" style="padding:56px">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border-strong);margin:0 auto 12px;display:block">
+      <path d="M5 19V5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/>
+      <path d="M9 14l2 2 4-4"/>
+    </svg>
+    Актів не знайдено
+  </div>
+  {% endif %}
+</div>
+
+{# ── Act Drawer ───────────────────────────────────────────────────── #}
+<div class="drawer" id="act-drawer">
+  <div class="drawer-header">
+    <h2 id="act-drw-title">Акт</h2>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+    <div class="info-list">
+      <div class="info-row"><span class="key">Акт №</span><span class="val mono" id="act-drw-no" style="font-family:var(--font-mono)"></span></div>
+      <div class="info-row"><span class="key">Клієнт</span><span class="val" id="act-drw-client"></span></div>
+      <div class="info-row"><span class="key">Рахунок</span><span class="val mono" id="act-drw-invoice" style="font-family:var(--font-mono)"></span></div>
+      <div class="info-row"><span class="key">Договір</span><span class="val mono" id="act-drw-contract" style="font-family:var(--font-mono)"></span></div>
+      <div class="info-row"><span class="key">Дата акту</span><span class="val" id="act-drw-date"></span></div>
+      <div class="info-row"><span class="key">Період</span><span class="val" id="act-drw-period"></span></div>
+      <div class="info-row"><span class="key">Сума</span><span class="val" id="act-drw-sum" style="font-size:15px;font-weight:600;font-family:var(--font-mono)"></span></div>
+      <div class="info-row"><span class="key">Статус</span><span id="act-drw-status"></span></div>
+    </div>
+    <div id="act-drw-pdf" style="margin-top:18px;display:none">
+      <a id="act-drw-pdf-link" href="#" target="_blank" class="btn btn-secondary" style="width:100%;justify-content:center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        Відкрити PDF
+      </a>
+    </div>
+  </div>
+
+  <div class="drawer-footer">
+    <span id="act-sign-wrap">
+      <form method="post" id="act-sign-form">
+        <button type="submit" class="btn btn-primary">✓ Підписано</button>
+      </form>
+    </span>
+    <span id="act-send-wrap">
+      <form method="post" id="act-send-form">
+        <button type="submit" class="btn btn-secondary">Направити</button>
+      </form>
+    </span>
+    <a id="act-edit-link" href="#" class="btn btn-ghost">Редагувати</a>
+    <button class="btn btn-ghost" onclick="closeDrawer()">Закрити</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openActDrawer(row) {
+  const d = JSON.parse(row.dataset.act);
+  document.getElementById('act-drw-title').textContent = d.no;
+  document.getElementById('act-drw-no').textContent = d.no;
+  document.getElementById('act-drw-client').textContent = d.client;
+  document.getElementById('act-drw-invoice').textContent = d.invoice || '—';
+  document.getElementById('act-drw-contract').textContent = d.contract || '—';
+  document.getElementById('act-drw-date').textContent = d.date || '—';
+  document.getElementById('act-drw-period').textContent =
+    d.period_from ? (d.period_from + (d.period_to ? ' – ' + d.period_to : '')) : '—';
+  document.getElementById('act-drw-sum').textContent = '₴ ' + Math.round(d.sum).toLocaleString('uk-UA');
+
+  let pill = '';
+  if (d.status === 'Підписано') pill = '<span class="pill pill-success">Підписано</span>';
+  else if (d.status === 'Скасовано') pill = '<span class="pill pill-mute">Скасовано</span>';
+  else if (d.status === 'Направлений') pill = '<span class="pill pill-warning">Направлений · ' + d.days + ' дн.</span>';
+  else pill = '<span class="pill pill-info">Чернетка</span>';
+  document.getElementById('act-drw-status').innerHTML = pill;
+
+  const pdfEl = document.getElementById('act-drw-pdf');
+  if (d.pdf) { document.getElementById('act-drw-pdf-link').href = d.pdf; pdfEl.style.display = ''; }
+  else pdfEl.style.display = 'none';
+
+  document.getElementById('act-edit-link').href = '/acts/' + d.no + '/edit';
+  document.getElementById('act-sign-form').action = '/acts/' + d.no + '/sign';
+  document.getElementById('act-send-form').action = '/acts/' + d.no + '/send';
+
+  const signWrap = document.getElementById('act-sign-wrap');
+  const sendWrap = document.getElementById('act-send-wrap');
+  const done = d.status === 'Підписано' || d.status === 'Скасовано';
+  signWrap.style.display = done ? 'none' : '';
+  sendWrap.style.display = (done || d.status === 'Направлений') ? 'none' : '';
+
+  openDrawer('act-drawer');
+}
+
+function filterActs(filter, tabEl) {
+  document.querySelectorAll('#act-tabs .status-tab').forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.querySelectorAll('#acts-table tbody tr').forEach(tr => {
+    tr.style.display = (filter === 'all' || tr.dataset.status === filter) ? '' : 'none';
+  });
+}
+
+function liveSearchActs(inp) {
+  const q = inp.value.toLowerCase();
+  document.querySelectorAll('#acts-table tbody tr').forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── Email toast notifications ─────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const p = new URLSearchParams(location.search);
+  const toast = p.get('toast');
+  const to    = p.get('to') || '';
+  const msgs = {
+    'email_ok':    `✉ Акт надіслано${to ? ' на ' + to : ''}`,
+    'noemail':     '⚠ У клієнта не вказано email. Додайте його в картці клієнта.',
+    'nopdf':       '⚠ Спочатку згенеруйте PDF акту.',
+    'nosmtp':      '⚠ Email не налаштовано. Заповніть SMTP у файлі .env.',
+    'email_error': '✕ Помилка відправки. Перевірте SMTP налаштування.',
+  };
+  if (toast && msgs[toast]) {
+    const type = toast === 'email_ok' ? 'success' : 'danger';
+    showToast(msgs[toast], type, 6000);
+    history.replaceState({}, '', location.pathname + (location.search.replace(/[?&]toast=[^&]*/g,'').replace(/[?&]to=[^&]*/g,'').replace(/^&/,'?') || ''));
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Витрати — DocketPro CRM{% endblock %}
+
+{% block page_title %}Витрати{% endblock %}
+{% block page_sub %}₴{{ fmt_money(total) }} за обраний період{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/expenses/export?date_from={{ date_from }}&date_to={{ date_to }}&category={{ category }}"
+     class="btn btn-secondary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+    Excel
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<div style="display:grid;grid-template-columns:288px 1fr;gap:var(--gap);align-items:start">
+
+  {# ── Форма додавання ─────────────────────────────────────────── #}
+  <div class="card card-body" style="position:sticky;top:22px">
+    <div class="card-head" style="margin:-18px -18px 16px;border-radius:var(--radius-lg) var(--radius-lg) 0 0">
+      <h3>Додати витрату</h3>
+    </div>
+    <form method="post" action="/expenses/new" style="display:flex;flex-direction:column;gap:12px">
+      <div class="field">
+        <label>Дата</label>
+        <input type="text" name="exp_date" value="{{ today_str }}" placeholder="дд.мм.рррр" required/>
+      </div>
+      <div class="field">
+        <label>Категорія</label>
+        <select name="category" required>
+          {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Опис</label>
+        <input type="text" name="description" placeholder="Короткий опис"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 85px;gap:8px">
+        <div class="field">
+          <label>Сума</label>
+          <input type="number" step="0.01" name="amount" required min="0"/>
+        </div>
+        <div class="field">
+          <label>Валюта</label>
+          <select name="currency">
+            <option value="грн">грн</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Курс (для USD/EUR)</label>
+        <input type="number" step="0.01" name="exchange_rate" value="1"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Додати
+      </button>
+    </form>
+  </div>
+
+  {# ── Список ──────────────────────────────────────────────────── #}
+  <div>
+    <div class="page-card">
+      <div class="toolbar" style="border-top:none">
+        <form method="get" style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
+          <input type="text" name="date_from" value="{{ date_from }}" placeholder="Від дд.мм.рррр"
+                 style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;width:130px"/>
+          <input type="text" name="date_to" value="{{ date_to }}" placeholder="До дд.мм.рррр"
+                 style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;width:130px"/>
+          <select name="category" onchange="this.form.submit()"
+                  style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none">
+            <option value="">Всі категорії</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if cat == category %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary btn-sm">Фільтр</button>
+          {% if date_from or date_to or category %}
+          <a href="/expenses" class="btn btn-ghost btn-sm">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </a>
+          {% endif %}
+          <div style="margin-left:auto;font-size:13px;color:var(--text-mute)">
+            Всього: <strong style="color:var(--text);font-family:var(--font-mono)">₴{{ fmt_money(total) }}</strong>
+          </div>
+        </form>
+      </div>
+
+      {% if expenses %}
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:100px">Дата</th>
+            <th style="width:180px">Категорія</th>
+            <th>Опис</th>
+            <th class="num" style="width:130px">Сума, грн</th>
+            <th style="width:44px"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for e in expenses %}
+        <tr>
+          <td style="font-size:12px;color:var(--text-mute);white-space:nowrap">{{ e.exp_date }}</td>
+          <td><span class="pill pill-mute" style="font-size:10.5px">{{ e.category }}</span></td>
+          <td style="color:var(--text-soft);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">{{ e.description or '—' }}</td>
+          <td class="num">₴{{ fmt_money(e.amount_uah) }}</td>
+          <td>
+            <div class="actions">
+              <form method="post" action="/expenses/{{ e.id }}/delete"
+                    onsubmit="return confirm('Видалити цей запис?')">
+                <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger-fg)" title="Видалити">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="pagination">
+        <span class="pg-info">Записів: {{ expenses|length }}</span>
+      </div>
+      {% else %}
+      <div class="empty" style="padding:48px">Витрат не знайдено</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

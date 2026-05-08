@@ -1,0 +1,712 @@
+{% extends "base.html" %}
+{% block title %}Договори — DocketPro CRM{% endblock %}
+
+{% block page_title %}Договори{% endblock %}
+{% block page_sub %}
+  {{ counts.active }} активних
+  {%- if mrr > 0 %} &nbsp;·&nbsp; MRR ₴{{ "{:,.0f}".format(mrr).replace(",", " ") }} &nbsp;·&nbsp; ARR ₴{{ "{:,.0f}".format(arr).replace(",", " ") }}{%- endif %}
+  {%- if hourly_cnt > 0 %} &nbsp;·&nbsp; {{ hourly_cnt }} погодинних{%- endif %}
+  {%- if total_debt > 0 %}<span style="color:var(--danger-fg)"> &nbsp;·&nbsp; Борг ₴{{ "{:,.0f}".format(total_debt).replace(",", " ") }}</span>{%- endif %}
+{% endblock %}
+
+{% block topbar_actions %}
+  {# View toggle #}
+  <div style="display:flex;gap:2px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <button id="btn-view-table" onclick="setView('table')"
+            title="Таблиця"
+            style="padding:5px 9px;border:0;background:var(--accent);color:var(--accent-contrast,#fff);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px;font-weight:500">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/>
+      </svg>
+    </button>
+    <button id="btn-view-cards" onclick="setView('cards')"
+            title="Картки"
+            style="padding:5px 9px;border:0;background:transparent;color:var(--text-mute);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+    </button>
+  </div>
+  <a href="/contracts/export?ctype={{ ctype }}&q={{ q }}" class="btn btn-secondary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+    Excel
+  </a>
+  <a href="/contracts/new" class="btn btn-primary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+    Новий договір
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="page-card">
+
+  {# ── Status tabs ─────────────────────────────────────────────── #}
+  <div class="status-tabs" id="cnt-tabs">
+    <button class="status-tab active" onclick="setTab('all', this)">
+      Всі <span class="tab-count">{{ counts.all }}</span>
+    </button>
+    <button class="status-tab" onclick="setTab('active', this)">
+      Активний <span class="tab-count">{{ counts.active }}</span>
+    </button>
+    <button class="status-tab" onclick="setTab('paused', this)">
+      Призупинено <span class="tab-count">{{ counts.paused }}</span>
+    </button>
+    <button class="status-tab" onclick="setTab('ended', this)">
+      Завершено <span class="tab-count">{{ counts.ended }}</span>
+    </button>
+    <button class="status-tab" onclick="setTab('draft', this)">
+      Чернетка <span class="tab-count">{{ counts.draft }}</span>
+    </button>
+    {% if counts.expiring > 0 %}
+    <button class="status-tab" onclick="setTab('expiring', this)"
+            style="color:var(--warning-fg)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+      Закінчуються <span class="tab-count">{{ counts.expiring }}</span>
+    </button>
+    {% endif %}
+  </div>
+
+  {# ── Toolbar ─────────────────────────────────────────────────── #}
+  <div class="toolbar" style="border-bottom:1px solid var(--border);margin-bottom:0;padding:10px 16px">
+    <div class="toolbar-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-mute)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+      <input type="text" id="cnt-search" value="{{ q }}"
+             placeholder="Клієнт або № договору..."
+             oninput="onSearch(this.value)"
+             style="width:240px"/>
+    </div>
+    <select id="cnt-ctype" onchange="onCtypeChange(this.value)"
+            style="font-size:13px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text)">
+      <option value="">Всі типи</option>
+      <option value="Доступ"      {% if ctype == 'Доступ' %}selected{% endif %}>Доступ</option>
+      <option value="Погодинний"  {% if ctype == 'Погодинний' %}selected{% endif %}>Погодинний</option>
+    </select>
+    <div class="toolbar-spacer"></div>
+    <button id="cnt-reset-btn" onclick="resetFilters()"
+            style="display:none"
+            class="btn btn-ghost btn-sm">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      Скинути
+    </button>
+  </div>
+
+  {# ── TABLE view ──────────────────────────────────────────────── #}
+  <div id="view-table">
+    {% if contracts %}
+    <table class="tbl" id="contracts-table">
+      <thead>
+        <tr>
+          <th style="width:155px;cursor:pointer;user-select:none" onclick="sortContracts('no')">
+            № договору <span id="sort-ind-no" class="sort-ind"></span>
+          </th>
+          <th style="cursor:pointer;user-select:none" onclick="sortContracts('client')">
+            Клієнт <span id="sort-ind-client" class="sort-ind"></span>
+          </th>
+          <th style="width:95px">Тип</th>
+          <th class="num" style="width:130px;cursor:pointer;user-select:none" onclick="sortContracts('sum_month')">
+            Сума/міс <span id="sort-ind-sum_month" class="sort-ind"></span>
+          </th>
+          <th style="width:55px;text-align:center">Кор.</th>
+          <th style="width:110px;cursor:pointer;user-select:none" onclick="sortContracts('start')">
+            Початок <span id="sort-ind-start" class="sort-ind"></span>
+          </th>
+          <th style="width:130px;cursor:pointer;user-select:none" onclick="sortContracts('end')">
+            Діє до <span id="sort-ind-end" class="sort-ind"></span>
+          </th>
+          <th class="num" style="width:100px;cursor:pointer;user-select:none" onclick="sortContracts('debt')">
+            Борг <span id="sort-ind-debt" class="sort-ind"></span>
+          </th>
+          <th style="width:95px;text-align:center">Статус</th>
+          <th style="width:72px;text-align:right">Дії</th>
+        </tr>
+      </thead>
+      <tbody id="cnt-tbody">
+      {% for item in contracts %}
+      {% set c = item.row %}
+      <tr class="clickable"
+          onclick="openContractDrawer(this)"
+          data-contract='{{ {
+            "no":        c.contract_no,
+            "client":    c.client_name,
+            "edrpou":    c.edrpou or "",
+            "ctype":     item.ctype_r,
+            "tariff":    (c.tariff_fx or 0)|float,
+            "hour_rate": (c.hour_rate or 0)|float,
+            "currency":  c.currency or "UAH",
+            "users":     (c.users or 1)|int,
+            "st":        item.st,
+            "start":     c.contract_date or "",
+            "end":       c.contract_end or "",
+            "days_left": item.days_left,
+            "subject":   c.subject or "",
+            "expiring":  item.expiring,
+            "debt":      item.debt,
+            "inv_total": item.inv_total,
+            "inv_unpaid":item.inv_unpaid,
+            "act_total": item.act_total,
+            "sum_month": item.sum_month
+          } | tojson }}'>
+        <td class="mono" style="font-size:12px">{{ c.contract_no }}</td>
+        <td style="font-weight:500;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.client_name }}</td>
+        <td>
+          {% if item.ctype_r == 'Доступ' %}
+            <span class="pill pill-accent">Доступ</span>
+          {% elif item.ctype_r == 'Погодинний' %}
+            <span class="pill pill-info">Погодинний</span>
+          {% else %}
+            <span class="pill pill-mute">{{ item.ctype_r or '—' }}</span>
+          {% endif %}
+        </td>
+        <td class="num" style="font-family:var(--font-mono);font-size:12.5px">
+          {% if item.ctype_r == 'Доступ' %}
+            {% if item.sum_month > 0 %}₴ {{ "{:,.0f}".format(item.sum_month).replace(",", " ") }}{% else %}—{% endif %}
+          {% else %}
+            {% if (c.hour_rate or 0) > 0 %}{{ c.hour_rate }} {{ c.currency }}/г{% else %}—{% endif %}
+          {% endif %}
+        </td>
+        <td style="text-align:center;color:var(--text-mute);font-size:13px">
+          {% if item.ctype_r == 'Доступ' %}{{ c.users or 1 }}{% else %}—{% endif %}
+        </td>
+        <td style="white-space:nowrap;font-size:12.5px;color:var(--text-soft)">
+          {{ c.contract_date or '—' }}
+        </td>
+        <td style="white-space:nowrap;font-size:12.5px">
+          {% if not c.contract_end %}
+            <span style="color:var(--text-mute)">—</span>
+          {% elif item.days_left is not none and item.days_left < 0 %}
+            <span style="color:var(--text-mute)">{{ c.contract_end }}</span>
+          {% elif item.days_left is not none and item.days_left <= 14 %}
+            <span style="color:var(--danger-fg);font-weight:600">{{ c.contract_end }}</span>
+            <span class="pill pill-danger" style="margin-left:4px;font-size:10px">{{ item.days_left }}д</span>
+          {% elif item.days_left is not none and item.days_left <= 30 %}
+            <span style="color:var(--warning-fg);font-weight:600">{{ c.contract_end }}</span>
+            <span class="pill pill-warning" style="margin-left:4px;font-size:10px">{{ item.days_left }}д</span>
+          {% else %}
+            <span style="color:var(--text-soft)">{{ c.contract_end }}</span>
+          {% endif %}
+        </td>
+        <td class="num" style="font-family:var(--font-mono);font-size:12.5px">
+          {% if item.debt > 0 %}
+            <span style="color:var(--danger-fg);font-weight:600">₴ {{ "{:,.0f}".format(item.debt).replace(",", " ") }}</span>
+          {% else %}
+            <span style="color:var(--text-mute)">—</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if item.st == 'Активний' %}
+            <span class="pill pill-success">Активний</span>
+          {% elif item.st == 'Призупинено' %}
+            <span class="pill pill-warning">Призупинено</span>
+          {% elif item.st in ('Завершено', 'Закінчено') %}
+            <span class="pill pill-mute">Завершено</span>
+          {% else %}
+            <span class="pill pill-mute">{{ item.st or 'Чернетка' }}</span>
+          {% endif %}
+        </td>
+        <td onclick="event.stopPropagation()">
+          <div class="actions">
+            <a href="/contracts/{{ c.contract_no }}/edit" class="btn btn-sm btn-ghost" title="Редагувати">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+            </a>
+            <form method="post" action="/contracts/{{ c.contract_no }}/delete"
+                  onsubmit="event.stopPropagation(); return confirm('Видалити договір {{ c.contract_no }}?\nТакож будуть видалені всі рахунки та акти.')">
+              <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger-fg)" title="Видалити">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {# ── Table footer ────────────────────────────────────────── #}
+    <div class="pagination">
+      <span id="cnt-footer" class="pg-info">Всього: {{ contracts|length }}</span>
+    </div>
+    {% else %}
+    <div class="empty" style="padding:56px">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border-strong);margin:0 auto 12px;display:block">
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>
+      </svg>
+      Договорів не знайдено
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── CARDS view ──────────────────────────────────────────────── #}
+  <div id="view-cards" style="display:none;padding:16px">
+    <div id="cnt-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+      {% for item in contracts %}
+      {% set c = item.row %}
+      <div class="contract-card clickable"
+           onclick="openContractDrawer(this)"
+           data-contract='{{ {
+             "no":        c.contract_no,
+             "client":    c.client_name,
+             "edrpou":    c.edrpou or "",
+             "ctype":     item.ctype_r,
+             "tariff":    (c.tariff_fx or 0)|float,
+             "hour_rate": (c.hour_rate or 0)|float,
+             "currency":  c.currency or "UAH",
+             "users":     (c.users or 1)|int,
+             "st":        item.st,
+             "start":     c.contract_date or "",
+             "end":       c.contract_end or "",
+             "days_left": item.days_left,
+             "subject":   c.subject or "",
+             "expiring":  item.expiring,
+             "debt":      item.debt,
+             "inv_total": item.inv_total,
+             "inv_unpaid":item.inv_unpaid,
+             "act_total": item.act_total,
+             "sum_month": item.sum_month
+           } | tojson }}'
+           style="border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;
+                  background:var(--surface);cursor:pointer;transition:box-shadow .15s;
+                  display:flex;flex-direction:column;gap:10px">
+
+        {# Card header: contract_no + type + status #}
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-mute);margin-bottom:2px">{{ c.contract_no }}</div>
+            <div style="font-size:13.5px;font-weight:600;color:var(--text);line-height:1.3">{{ c.client_name }}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            {% if item.st == 'Активний' %}<span class="pill pill-success">Активний</span>
+            {% elif item.st == 'Призупинено' %}<span class="pill pill-warning">Призупинено</span>
+            {% elif item.st in ('Завершено','Закінчено') %}<span class="pill pill-mute">Завершено</span>
+            {% else %}<span class="pill pill-mute">{{ item.st or 'Чернетка' }}</span>{% endif %}
+            {% if item.ctype_r == 'Доступ' %}<span class="pill pill-accent" style="font-size:10px">Доступ</span>
+            {% elif item.ctype_r == 'Погодинний' %}<span class="pill pill-info" style="font-size:10px">Погодинний</span>{% endif %}
+          </div>
+        </div>
+
+        {# Card body #}
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px">
+          {% if item.ctype_r == 'Доступ' and item.sum_month > 0 %}
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--text-mute)">Сума/міс</span>
+            <span style="font-family:var(--font-mono);font-weight:600">₴ {{ "{:,.0f}".format(item.sum_month).replace(",", " ") }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--text-mute)">Користувачів</span>
+            <span>{{ c.users or 1 }}</span>
+          </div>
+          {% elif item.ctype_r == 'Погодинний' and (c.hour_rate or 0) > 0 %}
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--text-mute)">Ставка</span>
+            <span style="font-family:var(--font-mono)">{{ c.hour_rate }} {{ c.currency }}/г</span>
+          </div>
+          {% endif %}
+          {% if c.contract_end %}
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text-mute)">Діє до</span>
+            <span style="{% if item.days_left is not none and item.days_left <= 14 %}color:var(--danger-fg);font-weight:600{% elif item.days_left is not none and item.days_left <= 30 %}color:var(--warning-fg);font-weight:600{% endif %}">
+              {{ c.contract_end }}
+              {% if item.days_left is not none and 0 <= item.days_left <= 30 %}
+                <span class="pill {% if item.days_left <= 14 %}pill-danger{% else %}pill-warning{% endif %}" style="font-size:10px;margin-left:3px">{{ item.days_left }}д</span>
+              {% endif %}
+            </span>
+          </div>
+          {% endif %}
+          {% if item.debt > 0 %}
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--text-mute)">Борг</span>
+            <span style="color:var(--danger-fg);font-weight:600;font-family:var(--font-mono)">₴ {{ "{:,.0f}".format(item.debt).replace(",", " ") }}</span>
+          </div>
+          {% endif %}
+        </div>
+
+        {# Card footer: actions #}
+        <div style="display:flex;gap:6px;margin-top:2px;border-top:1px solid var(--border);padding-top:10px"
+             onclick="event.stopPropagation()">
+          <a href="/invoices?client={{ c.client_name | urlencode }}" class="btn btn-sm btn-ghost" style="flex:1;justify-content:center;font-size:12px">
+            Рахунки
+            {% if item.inv_total > 0 %}<span style="background:var(--border-strong);border-radius:9px;padding:0 5px;font-size:10px;font-weight:600">{{ item.inv_total }}</span>{% endif %}
+          </a>
+          <a href="/contracts/{{ c.contract_no }}/edit" class="btn btn-sm btn-ghost" style="padding:4px 8px" title="Редагувати">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </a>
+          <form method="post" action="/contracts/{{ c.contract_no }}/delete"
+                onsubmit="return confirm('Видалити договір {{ c.contract_no }}?\nТакож будуть видалені всі рахунки та акти.')">
+            <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger-fg);padding:4px 8px" title="Видалити">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>
+            </button>
+          </form>
+        </div>
+
+      </div>
+      {% endfor %}
+    </div>
+    <div class="pagination" style="padding:12px 0 0">
+      <span id="cnt-cards-footer" class="pg-info">Всього: {{ contracts|length }}</span>
+    </div>
+  </div>
+
+  {# ── Empty state (shown by JS when nothing matches filters) ── #}
+  <div id="cnt-empty" style="display:none;padding:56px;text-align:center;color:var(--text-mute)">
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" style="display:block;margin:0 auto 10px;color:var(--border-strong)">
+      <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/>
+    </svg>
+    Нічого не знайдено
+  </div>
+
+</div>{# /page-card #}
+
+{# ── Contract Drawer ──────────────────────────────────────────────── #}
+<div class="drawer" id="contract-drawer">
+  <div class="drawer-header">
+    <h2 id="ct-drw-title" style="font-size:14px;font-family:var(--font-mono)">Договір</h2>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+
+    {# Status + type pills #}
+    <div id="ct-drw-pills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
+
+    {# Info list #}
+    <div class="info-list">
+      <div class="info-row"><span class="key">№ договору</span><span class="val mono" id="ct-drw-no" style="font-family:var(--font-mono)"></span></div>
+      <div class="info-row"><span class="key">Клієнт</span><span class="val" id="ct-drw-client" style="font-weight:500"></span></div>
+      <div class="info-row"><span class="key">ЄДРПОУ</span><span class="val mono" id="ct-drw-edrpou" style="font-family:var(--font-mono)"></span></div>
+      <div class="info-row"><span class="key">Тип</span><span id="ct-drw-type"></span></div>
+      <div class="info-row" id="ct-drw-tariff-row"><span class="key">Тариф</span><span class="val" id="ct-drw-tariff" style="font-family:var(--font-mono);font-weight:600"></span></div>
+      <div class="info-row" id="ct-drw-summonth-row"><span class="key">Сума/міс</span><span class="val" id="ct-drw-summonth" style="font-family:var(--font-mono);font-weight:600;color:var(--accent-fg)"></span></div>
+      <div class="info-row" id="ct-drw-users-row"><span class="key">Користувачів</span><span class="val" id="ct-drw-users"></span></div>
+      <div class="info-row" id="ct-drw-start-row" style="display:none"><span class="key">Початок</span><span class="val" id="ct-drw-start" style="font-size:12.5px"></span></div>
+      <div class="info-row"><span class="key">Діє до</span><span id="ct-drw-end"></span></div>
+      <div class="info-row" id="ct-drw-debt-row" style="display:none"><span class="key">Борг</span><span class="val" id="ct-drw-debt" style="font-family:var(--font-mono);font-weight:600;color:var(--danger-fg)"></span></div>
+      <div class="info-row" id="ct-drw-subject-row" style="display:none"><span class="key">Предмет</span><span class="val" id="ct-drw-subject" style="font-size:12px;color:var(--text-soft)"></span></div>
+    </div>
+
+    {# Invoice / Act stats #}
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:10px">Рахунки та акти</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="ct-drw-stats">
+        <div style="text-align:center;padding:10px 6px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border)">
+          <div style="font-size:18px;font-weight:700;color:var(--text)" id="ct-drw-inv-total">0</div>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:2px">Всього рах.</div>
+        </div>
+        <div style="text-align:center;padding:10px 6px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border)">
+          <div style="font-size:18px;font-weight:700" id="ct-drw-inv-unpaid">0</div>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:2px">Несплачено</div>
+        </div>
+        <div style="text-align:center;padding:10px 6px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border)">
+          <div style="font-size:18px;font-weight:700;color:var(--text)" id="ct-drw-act-total">0</div>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:2px">Актів</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="drawer-footer">
+    <a id="ct-drw-new-inv" href="#" class="btn btn-primary btn-sm">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Новий рахунок
+    </a>
+    <a id="ct-drw-invoices" href="#" class="btn btn-secondary btn-sm">Рахунки →</a>
+    <a id="ct-drw-edit" href="#" class="btn btn-ghost btn-sm">Редагувати</a>
+    <button class="btn btn-ghost btn-sm" onclick="closeDrawer()">Закрити</button>
+  </div>
+</div>
+
+<style>
+.sort-ind { font-size:10px; color:var(--text-mute); margin-left:2px; }
+.contract-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let currentTab    = 'all';
+let currentSearch = {{ q | tojson }};
+let currentCtype  = {{ ctype | tojson }};
+let sortField     = null;
+let sortDir       = 1;
+const TOTAL       = {{ contracts | length }};
+
+// ── Init ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  applyFilters();
+  if (currentSearch || currentCtype) {
+    document.getElementById('cnt-reset-btn').style.display = '';
+  }
+});
+
+// ── Tab filter ────────────────────────────────────────────────────
+function setTab(filter, tabEl) {
+  document.querySelectorAll('#cnt-tabs .status-tab').forEach(t => t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  currentTab = filter;
+  applyFilters();
+}
+
+// ── Search ────────────────────────────────────────────────────────
+function onSearch(val) {
+  currentSearch = val.toLowerCase().trim();
+  document.getElementById('cnt-reset-btn').style.display =
+    (currentSearch || currentCtype) ? '' : 'none';
+  applyFilters();
+}
+
+function onCtypeChange(val) {
+  currentCtype = val;
+  document.getElementById('cnt-reset-btn').style.display =
+    (currentSearch || currentCtype) ? '' : 'none';
+  applyFilters();
+}
+
+function resetFilters() {
+  currentSearch = '';
+  currentCtype  = '';
+  document.getElementById('cnt-search').value = '';
+  document.getElementById('cnt-ctype').value  = '';
+  document.getElementById('cnt-reset-btn').style.display = 'none';
+  setTab('all', document.querySelector('#cnt-tabs .status-tab'));
+}
+
+// ── Core filter ───────────────────────────────────────────────────
+function matchesTab(d) {
+  switch (currentTab) {
+    case 'all':      return true;
+    case 'active':   return d.st === 'Активний';
+    case 'paused':   return d.st === 'Призупинено';
+    case 'ended':    return d.st === 'Завершено' || d.st === 'Закінчено';
+    case 'draft':    return !['Активний','Призупинено','Завершено','Закінчено'].includes(d.st);
+    case 'expiring': return d.expiring === true;
+    default:         return true;
+  }
+}
+
+function matchesCtype(d) {
+  if (!currentCtype) return true;
+  return d.ctype === currentCtype;
+}
+
+function matchesSearch(d, el) {
+  if (!currentSearch) return true;
+  const text = (d.no + ' ' + d.client + ' ' + d.edrpou).toLowerCase();
+  return text.includes(currentSearch);
+}
+
+function applyFilters() {
+  let visibleCount = 0;
+  let visibleMrr   = 0;
+
+  // Apply to table rows
+  document.querySelectorAll('#cnt-tbody tr[data-contract]').forEach(tr => {
+    const d = JSON.parse(tr.dataset.contract);
+    const show = matchesTab(d) && matchesCtype(d) && matchesSearch(d, tr);
+    tr.style.display = show ? '' : 'none';
+    if (show) {
+      visibleCount++;
+      if (d.ctype === 'Доступ' && d.st === 'Активний') visibleMrr += d.sum_month;
+    }
+  });
+
+  // Apply to cards
+  document.querySelectorAll('#cnt-cards-grid .contract-card[data-contract]').forEach(card => {
+    const d = JSON.parse(card.dataset.contract);
+    const show = matchesTab(d) && matchesCtype(d) && matchesSearch(d, card);
+    card.style.display = show ? '' : 'none';
+  });
+
+  // Empty state
+  const emptyEl = document.getElementById('cnt-empty');
+  if (visibleCount === 0 && TOTAL > 0) {
+    emptyEl.style.display = '';
+  } else {
+    emptyEl.style.display = 'none';
+  }
+
+  // Footer
+  updateFooterStats(visibleCount, visibleMrr);
+}
+
+// ── Footer stats ──────────────────────────────────────────────────
+function updateFooterStats(visible, mrr) {
+  if (visible === undefined) {
+    visible = 0; mrr = 0;
+    document.querySelectorAll('#cnt-tbody tr[data-contract]').forEach(tr => {
+      if (tr.style.display !== 'none') {
+        const d = JSON.parse(tr.dataset.contract);
+        visible++;
+        if (d.ctype === 'Доступ' && d.st === 'Активний') mrr += d.sum_month;
+      }
+    });
+  }
+  const txt = `Показано ${visible} з ${TOTAL}` +
+    (mrr > 0 ? `  ·  MRR (відф.): ₴ ${Math.round(mrr).toLocaleString('uk-UA')}` : '');
+
+  const f1 = document.getElementById('cnt-footer');
+  const f2 = document.getElementById('cnt-cards-footer');
+  if (f1) f1.textContent = txt;
+  if (f2) f2.textContent = txt;
+}
+
+// ── View toggle ───────────────────────────────────────────────────
+function setView(view) {
+  const tableDiv = document.getElementById('view-table');
+  const cardsDiv = document.getElementById('view-cards');
+  const btnT = document.getElementById('btn-view-table');
+  const btnC = document.getElementById('btn-view-cards');
+
+  if (view === 'table') {
+    tableDiv.style.display = '';
+    cardsDiv.style.display = 'none';
+    btnT.style.background = 'var(--accent)';
+    btnT.style.color = 'var(--accent-contrast, #fff)';
+    btnC.style.background = 'transparent';
+    btnC.style.color = 'var(--text-mute)';
+  } else {
+    tableDiv.style.display = 'none';
+    cardsDiv.style.display = '';
+    btnT.style.background = 'transparent';
+    btnT.style.color = 'var(--text-mute)';
+    btnC.style.background = 'var(--accent)';
+    btnC.style.color = 'var(--accent-contrast, #fff)';
+  }
+}
+
+// ── Sort ──────────────────────────────────────────────────────────
+function sortContracts(field) {
+  if (sortField === field) {
+    sortDir *= -1;
+  } else {
+    sortField = field;
+    sortDir   = 1;
+  }
+
+  // Update indicators
+  document.querySelectorAll('.sort-ind').forEach(el => el.textContent = '');
+  const ind = document.getElementById('sort-ind-' + field);
+  if (ind) ind.textContent = sortDir === 1 ? '↑' : '↓';
+
+  const tbody = document.getElementById('cnt-tbody');
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr[data-contract]'));
+
+  rows.sort((a, b) => {
+    const da = JSON.parse(a.dataset.contract);
+    const db = JSON.parse(b.dataset.contract);
+    let va = da[field], vb = db[field];
+    if (va === null || va === undefined) va = '';
+    if (vb === null || vb === undefined) vb = '';
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return (va - vb) * sortDir;
+    }
+    return String(va).localeCompare(String(vb), 'uk') * sortDir;
+  });
+
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+// ── Drawer ────────────────────────────────────────────────────────
+function openContractDrawer(el) {
+  const d = JSON.parse(el.dataset.contract);
+
+  document.getElementById('ct-drw-title').textContent = d.no;
+  document.getElementById('ct-drw-no').textContent     = d.no;
+  document.getElementById('ct-drw-client').textContent  = d.client;
+  document.getElementById('ct-drw-edrpou').textContent  = d.edrpou || '—';
+
+  // Status + type pills
+  const pillsEl = document.getElementById('ct-drw-pills');
+  let pillsHtml = '';
+  if (d.st === 'Активний')                         pillsHtml += '<span class="pill pill-success">Активний</span>';
+  else if (d.st === 'Призупинено')                  pillsHtml += '<span class="pill pill-warning">Призупинено</span>';
+  else if (d.st==='Завершено'||d.st==='Закінчено')  pillsHtml += '<span class="pill pill-mute">Завершено</span>';
+  else                                              pillsHtml += `<span class="pill pill-mute">${d.st||'Чернетка'}</span>`;
+  if (d.expiring) pillsHtml += '<span class="pill pill-warning">Закінчується</span>';
+  if (d.ctype === 'Доступ')      pillsHtml += '<span class="pill pill-accent">Доступ</span>';
+  else if (d.ctype === 'Погодинний') pillsHtml += '<span class="pill pill-info">Погодинний</span>';
+  pillsEl.innerHTML = pillsHtml;
+
+  // Type cell
+  const typeEl = document.getElementById('ct-drw-type');
+  if (d.ctype === 'Доступ')      typeEl.innerHTML = '<span class="pill pill-accent">Доступ</span>';
+  else if (d.ctype === 'Погодинний') typeEl.innerHTML = '<span class="pill pill-info">Погодинний</span>';
+  else typeEl.textContent = d.ctype || '—';
+
+  // Tariff / sum_month / users
+  if (d.ctype === 'Доступ') {
+    document.getElementById('ct-drw-tariff').textContent = `${d.tariff} ${d.currency}`;
+    document.getElementById('ct-drw-tariff-row').style.display = '';
+    document.getElementById('ct-drw-summonth').textContent =
+      d.sum_month > 0 ? `₴ ${Math.round(d.sum_month).toLocaleString('uk-UA')}` : '—';
+    document.getElementById('ct-drw-summonth-row').style.display = '';
+    document.getElementById('ct-drw-users').textContent = d.users;
+    document.getElementById('ct-drw-users-row').style.display = '';
+  } else {
+    document.getElementById('ct-drw-tariff').textContent =
+      d.hour_rate > 0 ? `${d.hour_rate} ${d.currency}/год` : '—';
+    document.getElementById('ct-drw-tariff-row').style.display = '';
+    document.getElementById('ct-drw-summonth-row').style.display = 'none';
+    document.getElementById('ct-drw-users-row').style.display = 'none';
+  }
+
+  // Start date
+  const startRow = document.getElementById('ct-drw-start-row');
+  if (d.start) {
+    document.getElementById('ct-drw-start').textContent = d.start;
+    startRow.style.display = '';
+  } else {
+    startRow.style.display = 'none';
+  }
+
+  // End date
+  const endEl = document.getElementById('ct-drw-end');
+  if (!d.end) {
+    endEl.innerHTML = '<span class="val" style="color:var(--text-mute)">—</span>';
+  } else if (d.days_left !== null && d.days_left <= 14 && d.days_left >= 0) {
+    endEl.innerHTML = `<span class="val" style="color:var(--danger-fg);font-weight:600">${d.end} <span class="pill pill-danger">${d.days_left} дн.</span></span>`;
+  } else if (d.days_left !== null && d.days_left <= 30 && d.days_left >= 0) {
+    endEl.innerHTML = `<span class="val" style="color:var(--warning-fg);font-weight:600">${d.end} <span class="pill pill-warning">${d.days_left} дн.</span></span>`;
+  } else {
+    endEl.innerHTML = `<span class="val">${d.end}</span>`;
+  }
+
+  // Debt
+  const debtRow = document.getElementById('ct-drw-debt-row');
+  if (d.debt > 0) {
+    document.getElementById('ct-drw-debt').textContent = `₴ ${Math.round(d.debt).toLocaleString('uk-UA')}`;
+    debtRow.style.display = '';
+  } else {
+    debtRow.style.display = 'none';
+  }
+
+  // Subject
+  const subRow = document.getElementById('ct-drw-subject-row');
+  if (d.subject) {
+    document.getElementById('ct-drw-subject').textContent = d.subject;
+    subRow.style.display = '';
+  } else {
+    subRow.style.display = 'none';
+  }
+
+  // Invoice / act stats
+  document.getElementById('ct-drw-inv-total').textContent = d.inv_total;
+  const unpaidEl = document.getElementById('ct-drw-inv-unpaid');
+  unpaidEl.textContent = d.inv_unpaid;
+  unpaidEl.style.color = d.inv_unpaid > 0 ? 'var(--danger-fg)' : 'var(--text)';
+  document.getElementById('ct-drw-act-total').textContent = d.act_total;
+
+  // Links
+  document.getElementById('ct-drw-edit').href     = '/contracts/' + d.no + '/edit';
+  document.getElementById('ct-drw-invoices').href = '/invoices?client=' + encodeURIComponent(d.client);
+  document.getElementById('ct-drw-new-inv').href  = '/invoices/new?contract_no=' + encodeURIComponent(d.no);
+
+  openDrawer('contract-drawer');
+}
+</script>
+{% endblock %}

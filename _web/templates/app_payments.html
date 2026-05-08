@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}LiqPay — DocketPro CRM{% endblock %}
+
+{% block page_title %}LiqPay{% endblock %}
+{% block page_sub %}₴{{ fmt_money(total) }} за обраний період{% endblock %}
+
+{% block content %}
+
+<div style="display:grid;grid-template-columns:288px 1fr;gap:var(--gap);align-items:start">
+
+  {# ── Форма додавання ─────────────────────────────────────────── #}
+  <div class="card card-body" style="position:sticky;top:22px">
+    <div class="card-head" style="margin:-18px -18px 16px;border-radius:var(--radius-lg) var(--radius-lg) 0 0">
+      <h3>Додати оплату</h3>
+    </div>
+    <form method="post" action="/app-payments/new" style="display:flex;flex-direction:column;gap:12px">
+      <div class="field">
+        <label>Дата</label>
+        <input type="text" name="pay_date" value="{{ today_str }}" placeholder="дд.мм.рррр" required/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 85px;gap:8px">
+        <div class="field">
+          <label>Сума</label>
+          <input type="number" step="0.01" name="amount" required min="0"/>
+        </div>
+        <div class="field">
+          <label>Валюта</label>
+          <select name="currency">
+            <option value="UAH">UAH</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Джерело</label>
+        <select name="source">
+          {% for s in sources %}
+          <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Призначення</label>
+        <input type="text" name="description" placeholder="Опис платежу"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Додати
+      </button>
+    </form>
+  </div>
+
+  {# ── Список ──────────────────────────────────────────────────── #}
+  <div>
+    <div class="page-card">
+      <div class="toolbar">
+        <form method="get" style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
+          <input type="text" name="date_from" value="{{ date_from }}" placeholder="Від дд.мм.рррр"
+                 style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;width:130px"/>
+          <input type="text" name="date_to" value="{{ date_to }}" placeholder="До дд.мм.рррр"
+                 style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;width:130px"/>
+          <select name="source" onchange="this.form.submit()"
+                  style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none">
+            <option value="">Всі джерела</option>
+            {% for s in sources %}
+            <option value="{{ s }}" {% if s == source %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary btn-sm">Фільтр</button>
+          {% if date_from or date_to or source %}
+          <a href="/app_payments" class="btn btn-ghost btn-sm">✕</a>
+          {% endif %}
+          <div style="margin-left:auto;font-size:13px;color:var(--text-mute)">
+            Всього: <strong style="color:var(--text);font-family:var(--font-mono)">₴{{ fmt_money(total) }}</strong>
+          </div>
+        </form>
+      </div>
+
+      {% if payments %}
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:100px">Дата</th>
+            <th style="width:110px">Джерело</th>
+            <th>Призначення</th>
+            <th class="num" style="width:130px">Сума</th>
+            <th style="width:44px"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for p in payments %}
+        <tr>
+          <td style="font-size:12px;color:var(--text-mute);white-space:nowrap">{{ p.pay_date }}</td>
+          <td>
+            {% if p.source == 'lyqpay' %}
+              <span class="pill pill-info">📱 LiqPay</span>
+            {% else %}
+              <span class="pill pill-mute">{{ p.source }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:13px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">{{ p.description or '—' }}</td>
+          <td class="num">₴{{ fmt_money(p.amount) }}</td>
+          <td>
+            <div class="actions">
+              <form method="post" action="/app-payments/{{ p.id }}/delete"
+                    onsubmit="return confirm('Видалити цей запис?')">
+                <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger-fg)" title="Видалити">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="pagination">
+        <span class="pg-info">Записів: {{ payments|length }}</span>
+      </div>
+      {% else %}
+      <div class="empty" style="padding:48px">Оплат не знайдено</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

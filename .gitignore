@@ -1,0 +1,59 @@
+# Secrets — НІКОЛИ не комітити
+.env
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+.installed.cfg
+*.egg-info/
+dist/
+build/
+
+# Database — локальна БД не потрібна в репо
+crm.db
+crm.db-shm
+crm.db-wal
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+uvicorn.log
+
+# Реальні документи клієнтів — НЕ в публічне репо
+Договори/
+
+# Excel з даними клієнтів
+*.xlsx
+*.xls
+
+# Claude Code внутрішні файли
+.claude/
+
+# Тимчасові файли
+*.tmp
+*.bak

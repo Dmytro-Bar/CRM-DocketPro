@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Банк — DocketPro CRM{% endblock %}
+
+{% block page_title %}Банк{% endblock %}
+{% block page_sub %}Звірка з Monobank{% endblock %}
+
+{% block topbar_actions %}
+  <form method="post" action="/payments/fetch" style="display:flex;align-items:center;gap:8px">
+    <select name="days" style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none">
+      {% for d in [7, 14, 30, 60, 90] %}
+      <option value="{{ d }}" {% if d == days %}selected{% endif %}>{{ d }} днів</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary" {% if not token_ok %}disabled style="opacity:.5;cursor:not-allowed"{% endif %}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+      Оновити виписку
+    </button>
+  </form>
+{% endblock %}
+
+{% block content %}
+
+{% if not token_ok %}
+<div class="alert alert-danger" style="margin-bottom:var(--gap)">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+  MONO_TOKEN не знайдено в <code>.env</code> — завантаження виписки недоступне
+</div>
+{% endif %}
+
+{% if message %}
+<div class="alert alert-success" style="margin-bottom:var(--gap)">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg>
+  {{ message }}
+</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger" style="margin-bottom:var(--gap)">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+  {{ error }}
+</div>
+{% endif %}
+
+{% if results %}
+{# ── Period info ─────────────────────────────────────────────── #}
+{% if date_from %}
+<div style="font-size:12.5px;color:var(--text-mute);margin-bottom:var(--gap)">
+  Виписка за <strong style="color:var(--text)">{{ date_from }}</strong> — <strong style="color:var(--text)">{{ date_to }}</strong>
+</div>
+{% endif %}
+{% endif %}
+
+{% if stats %}
+{# ── KPI ─────────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:var(--gap);margin-bottom:var(--gap)">
+  <div class="kpi">
+    <div class="kpi-label">Надходжень</div>
+    <div class="kpi-value">{{ stats.total }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label" style="color:var(--success-fg)">Точних збігів</div>
+    <div class="kpi-value" style="color:var(--success-fg)">{{ stats.exact }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Схожих</div>
+    <div class="kpi-value" style="color:var(--accent-fg)">{{ stats.fuzzy }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">По ЄДРПОУ</div>
+    <div class="kpi-value" style="color:var(--warning-fg)">{{ stats.edrpou }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">LiqPay</div>
+    <div class="kpi-value" style="color:var(--info-fg)">{{ stats.lyqpay }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Без збігу</div>
+    <div class="kpi-value" style="color:var(--text-mute)">{{ stats.no_match }}</div>
+  </div>
+  <div class="kpi" {% if stats.unpaid > 0 %}style="border-color:var(--danger-soft)"{% endif %}>
+    <div class="kpi-label" style="color:var(--danger-fg)">Неоплачених</div>
+    <div class="kpi-value" style="color:var(--danger-fg)">{{ stats.unpaid }}</div>
+  </div>
+</div>
+{% endif %}
+
+{% if results %}
+<div class="page-card">
+
+  {# ── Legend + bulk header ────────────────────────────────────── #}
+  <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--text-mute)">Позначення:</span>
+    <span class="pill pill-success">✓ Точний</span>
+    <span class="pill" style="background:#fce7f3;color:#9d174d">~ Схожий</span>
+    <span class="pill pill-warning">? ЄДРПОУ</span>
+    <span class="pill pill-info">📱 LiqPay</span>
+    <span class="pill pill-mute">— Немає збігу</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button type="button" onclick="selectExact()" class="btn btn-sm btn-secondary">Вибрати точні</button>
+      <button type="button" onclick="deselectAll()" class="btn btn-sm btn-ghost">Зняти всі</button>
+      <button type="button" onclick="submitBulk()" class="btn btn-sm btn-primary" id="bulk-btn" disabled>
+        ✓ Позначити оплаченими (0)
+      </button>
+    </div>
+  </div>
+
+  <form method="post" action="/payments/mark-paid-bulk" id="bulk-form">
+  <table class="tbl" id="pay-table">
+    <thead>
+      <tr>
+        <th style="width:36px;text-align:center">
+          <input type="checkbox" onchange="toggleAllPay(this)"/>
+        </th>
+        <th style="width:90px">Дата</th>
+        <th style="width:190px">Платник</th>
+        <th style="width:90px">ЄДРПОУ</th>
+        <th class="num" style="width:110px">Сума</th>
+        <th style="width:145px">Рахунок</th>
+        <th class="num" style="width:110px">Сума рах.</th>
+        <th style="width:110px;text-align:center">Збіг</th>
+        <th>Призначення</th>
+      </tr>
+    </thead>
+    <tbody id="results-tbody">
+    {% set ns = namespace(idx=0) %}
+    {% for r in results %}
+    {% if r.match_type == "exact" %}{% set row_bg = "color-mix(in oklch, var(--success-soft) 40%, transparent)" %}
+    {% elif r.match_type == "fuzzy" %}{% set row_bg = "#fdf2f8" %}
+    {% elif r.match_type == "edrpou" %}{% set row_bg = "color-mix(in oklch, var(--warning-soft) 40%, transparent)" %}
+    {% elif r.match_type == "lyqpay" %}{% set row_bg = "color-mix(in oklch, var(--info-soft) 40%, transparent)" %}
+    {% else %}{% set row_bg = "" %}{% endif %}
+    <tr style="{% if row_bg %}background:{{ row_bg }}{% endif %}"
+        data-match-type="{{ r.match_type }}"
+        data-invoice="{{ r.invoice_no }}"
+        data-pay-date="{{ r.row_pay_date }}"
+        data-idx="{{ ns.idx }}">
+      <td style="text-align:center">
+        {% if r.selectable and r.invoice_no %}
+        <input type="checkbox" class="row-chk" data-idx="{{ ns.idx }}" onchange="onCheckChange(this)"/>
+        {% else %}
+        <span style="color:var(--border-strong)">—</span>
+        {% endif %}
+      </td>
+      <td style="font-size:12px;color:var(--text-mute);white-space:nowrap">{{ r.pay_date }}</td>
+      <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px" title="{{ r.payer }}">{{ r.payer }}</td>
+      <td class="mono" style="font-size:11.5px;color:var(--text-mute)">{{ r.edrpou }}</td>
+      <td class="num" style="font-weight:700">₴{{ fmt_money(r.amount) }}</td>
+      <td class="mono" style="font-size:11.5px;color:var(--accent-fg);white-space:nowrap">{{ r.invoice_no or '—' }}</td>
+      <td class="num" style="font-size:12px;color:var(--text-mute)">
+        {% if r.inv_sum is not none %}₴{{ fmt_money(r.inv_sum) }}{% else %}—{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if r.match_type == "exact" %}<span class="pill pill-success">✓ Точний</span>
+        {% elif r.match_type == "fuzzy" %}<span class="pill" style="background:#fce7f3;color:#9d174d">{{ r.match_label }}</span>
+        {% elif r.match_type == "edrpou" %}<span class="pill pill-warning">? ЄДРПОУ</span>
+        {% elif r.match_type == "lyqpay" %}<span class="pill pill-info">📱 LiqPay</span>
+        {% else %}<span style="color:var(--text-mute);font-size:11px">—</span>{% endif %}
+      </td>
+      <td style="font-size:11.5px;color:var(--text-mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0" title="{{ r.purpose }}">
+        {{ r.purpose }}
+      </td>
+    </tr>
+    {% set ns.idx = ns.idx + 1 %}
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <span class="pg-info">Транзакцій: {{ results|length }}</span>
+  </div>
+
+  </form>
+</div>
+
+{% else %}
+<div class="page-card">
+  <div class="empty" style="padding:60px">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border-strong);margin:0 auto 14px;display:block">
+      <path d="M3 10l9-6 9 6"/><path d="M5 10v8M9 10v8M15 10v8M19 10v8"/><path d="M3 21h18"/>
+    </svg>
+    Натисніть <strong>«Оновити виписку»</strong>, щоб отримати дані з Monobank API
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const checked = {};
+
+function onCheckChange(el) {
+  const idx = el.dataset.idx;
+  const row = el.closest('tr');
+  if (el.checked) {
+    checked[idx] = { invoice_no: row.dataset.invoice, pay_date: row.dataset.payDate };
+  } else {
+    delete checked[idx];
+  }
+  updateBulkBtn();
+}
+
+function updateBulkBtn() {
+  const count = Object.keys(checked).length;
+  const btn = document.getElementById('bulk-btn');
+  if (btn) { btn.disabled = count === 0; btn.textContent = '✓ Позначити оплаченими (' + count + ')'; }
+}
+
+function selectExact() {
+  document.querySelectorAll("tr[data-match-type='exact'] .row-chk").forEach(el => {
+    if (!el.checked) { el.checked = true; onCheckChange(el); }
+  });
+}
+
+function deselectAll() {
+  document.querySelectorAll('.row-chk:checked').forEach(el => { el.checked = false; onCheckChange(el); });
+}
+
+function toggleAllPay(cb) {
+  document.querySelectorAll('.row-chk').forEach(el => { el.checked = cb.checked; onCheckChange(el); });
+}
+
+function submitBulk() {
+  const entries = Object.entries(checked);
+  if (!entries.length) return;
+  const form = document.getElementById('bulk-form');
+  entries.forEach(([i, data], seq) => {
+    const f1 = document.createElement('input'); f1.type = 'hidden'; f1.name = 'invoice_no_' + seq; f1.value = data.invoice_no; form.appendChild(f1);
+    const f2 = document.createElement('input'); f2.type = 'hidden'; f2.name = 'pay_date_' + seq; f2.value = data.pay_date; form.appendChild(f2);
+  });
+  form.submit();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+{% block title %}Шаблони — DocketPro CRM{% endblock %}
+
+{% block page_title %}Шаблони документів{% endblock %}
+{% block page_sub %}{{ total }} шаблони Word (.docx){% endblock %}
+
+{% block topbar_actions %}
+<a href="/templates/create" class="btn btn-secondary">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M12 5v14M5 12h14"/>
+  </svg>
+  Створити шаблон
+</a>
+<button class="btn btn-primary" onclick="openDrawer('upload-drawer')">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>
+  </svg>
+  Завантажити шаблон
+</button>
+{% endblock %}
+
+{% block content %}
+
+{% set invoice_count = counts.invoice %}
+{% set act_count     = counts.act %}
+{% set letter_count  = counts.letter %}
+{% set other_count   = counts.other %}
+
+{# ── Status tabs ─────────────────────────────────────────────── #}
+<div class="status-tabs" style="margin-bottom:var(--gap)">
+  <button class="status-tab active" onclick="filterTpls('all', this)">
+    Всі <span class="tab-count">{{ total }}</span>
+  </button>
+  <button class="status-tab" onclick="filterTpls('invoice', this)">
+    Рахунки <span class="tab-count">{{ invoice_count }}</span>
+  </button>
+  <button class="status-tab" onclick="filterTpls('act', this)">
+    Акти <span class="tab-count">{{ act_count }}</span>
+  </button>
+  <button class="status-tab" onclick="filterTpls('letter', this)">
+    Листи <span class="tab-count">{{ letter_count }}</span>
+  </button>
+  {% if other_count > 0 %}
+  <button class="status-tab" onclick="filterTpls('other', this)">
+    Інше <span class="tab-count">{{ other_count }}</span>
+  </button>
+  {% endif %}
+</div>
+
+{# ── Template grid ────────────────────────────────────────────── #}
+<div id="tpl-grid"
+     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--gap);align-items:start">
+
+  {% for t in templates %}
+  <div class="card card-body tpl-card"
+       data-category="{{ t.category }}"
+       data-tpl='{{ t | tojson }}'
+       onclick="openTplDrawer(this)"
+       style="cursor:pointer;transition:box-shadow .15s,transform .1s"
+       onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)'"
+       onmouseleave="this.style.boxShadow='';this.style.transform=''">
+
+    {# Icon + title row #}
+    <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+      <div style="width:42px;height:42px;flex-shrink:0;
+                  background:color-mix(in oklch,
+                    {% if t.category == 'letter' %}var(--warning){% elif t.category == 'act' %}var(--info){% else %}var(--accent){% endif %}
+                    12%,transparent);
+                  border-radius:var(--radius);
+                  display:flex;align-items:center;justify-content:center">
+        {% if t.category == 'letter' %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="var(--warning-fg)" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <path d="M22 6l-10 7L2 6"/>
+        </svg>
+        {% elif t.category == 'act' %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="var(--info-fg)" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 19V5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/>
+          <path d="M9 14l2 2 4-4"/>
+        </svg>
+        {% else %}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="var(--accent-fg)" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>
+        </svg>
+        {% endif %}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;color:var(--text);
+                    line-height:1.35;margin-bottom:6px;
+                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {{ t.display }}
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          {% if t.category == 'invoice' %}
+            <span class="pill pill-accent">Рахунок</span>
+          {% elif t.category == 'act' %}
+            <span class="pill pill-info">Акт</span>
+          {% elif t.category == 'letter' %}
+            <span class="pill pill-warning">Лист</span>
+          {% else %}
+            <span class="pill pill-mute">{{ t.category_label }}</span>
+          {% endif %}
+          {% if t.ttype_label %}
+            <span class="pill pill-mute">{{ t.ttype_label }}</span>
+          {% endif %}
+          {% if t.is_standard %}
+            <span class="pill pill-mute" style="font-size:10px">Стандартний</span>
+          {% else %}
+            <span class="pill pill-warning" style="font-size:10px">Кастомний</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Stats footer #}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--text-mute)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px">
+          <path d="M4 6h16M4 10h16M4 14h8M4 18h5"/>
+        </svg>
+        <strong style="color:var(--text)">{{ t.var_count }}</strong> змінних
+      </div>
+      <div style="display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">
+        <span style="font-size:11px;color:var(--text-mute)">{{ t.size_kb }} КБ</span>
+        {% if not t.is_standard %}
+        <form method="post" action="/templates/{{ t.filename }}/delete"
+              onsubmit="return confirm('Видалити шаблон «{{ t.display }}»?')">
+          <button type="submit" class="btn btn-sm btn-ghost"
+                  style="color:var(--danger-fg);padding:2px 6px"
+                  title="Видалити шаблон">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/>
+            </svg>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+  {% else %}
+  <div class="empty" style="grid-column:1/-1;padding:64px">Шаблони не знайдено</div>
+  {% endfor %}
+
+</div>
+
+{# ── Template detail drawer ───────────────────────────────────── #}
+<div class="drawer" id="tpl-drawer">
+  <div class="drawer-header">
+    <h3 id="tdr-title">Шаблон</h3>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+
+    <div id="tdr-badges" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px"></div>
+
+    <div class="info-list" style="margin-bottom:18px">
+      <div class="info-row">
+        <span class="key">Файл</span>
+        <span id="tdr-file" class="val"
+              style="font-family:var(--font-mono);font-size:11.5px;word-break:break-all"></span>
+      </div>
+      <div class="info-row">
+        <span class="key">Розмір</span>
+        <span id="tdr-size" class="val"></span>
+      </div>
+      <div class="info-row">
+        <span class="key">Тип</span>
+        <span id="tdr-type" class="val"></span>
+      </div>
+      <div class="info-row">
+        <span class="key">Шаблон</span>
+        <span id="tdr-std" class="val"></span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:8px;font-size:11px;font-weight:600;
+                color:var(--text-mute);text-transform:uppercase;letter-spacing:.06em">
+      Змінні шаблону
+    </div>
+    <div id="tdr-vars" style="display:flex;flex-direction:column;gap:3px;margin-bottom:20px"></div>
+
+    {# ── Contract assignment section ── #}
+    <div id="tdr-contracts-section">
+      <div style="margin-bottom:8px;font-size:11px;font-weight:600;
+                  color:var(--text-mute);text-transform:uppercase;letter-spacing:.06em">
+        Договори що використовують цей шаблон
+      </div>
+      <div id="tdr-contract-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
+
+      <div style="margin-bottom:6px;font-size:12.5px;font-weight:500;color:var(--text)">
+        Призначити до договору
+      </div>
+      <form id="tdr-assign-form" method="post" style="display:flex;flex-direction:column;gap:8px">
+        <select name="contract_no" id="tdr-contract-select" required
+                style="font-size:13px">
+          <option value="">— виберіть договір —</option>
+          {% for c in (all_contracts | default([])) %}
+          <option value="{{ c.contract_no }}">
+            {{ c.client_name }} · {{ c.contract_no }}{% if c.contract_type %} ({{ c.contract_type }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-start">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          Призначити
+        </button>
+      </form>
+    </div>
+
+  </div>
+  <div class="drawer-footer">
+    <a id="tdr-download" href="#" class="btn btn-primary" download>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+      </svg>
+      Скачати .docx
+    </a>
+    <button onclick="closeDrawer()" class="btn btn-ghost">Закрити</button>
+  </div>
+</div>
+
+{# ── Upload drawer ────────────────────────────────────────────── #}
+<div class="drawer" id="upload-drawer">
+  <div class="drawer-header">
+    <h3>Завантажити шаблон</h3>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+
+    <form method="post" action="/templates/upload" enctype="multipart/form-data"
+          id="upload-form" style="display:flex;flex-direction:column;gap:16px">
+
+      <div class="field">
+        <label>Файл шаблону (.docx) <span style="color:var(--danger)">*</span></label>
+        <div id="drop-zone"
+             style="border:2px dashed var(--border);border-radius:var(--radius);
+                    padding:28px;text-align:center;cursor:pointer;
+                    transition:border-color .15s,background .15s"
+             onclick="document.getElementById('file-input').click()"
+             ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+             ondragleave="this.style.borderColor='var(--border)'"
+             ondrop="handleDrop(event)">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+               style="color:var(--text-mute);display:block;margin:0 auto 8px">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>
+          </svg>
+          <div style="font-size:13px;color:var(--text-mute)" id="drop-label">
+            Перетягніть .docx сюди або клікніть для вибору
+          </div>
+          <input type="file" id="file-input" name="file" accept=".docx"
+                 style="display:none" onchange="onFileSelect(this)" required/>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Тип шаблону</label>
+        <select name="category" id="up-category" onchange="updateUploadHint()">
+          <option value="invoice">Рахунок</option>
+          <option value="act" selected>Акт</option>
+          <option value="letter">Лист / Нагадування</option>
+          <option value="other">Інше</option>
+        </select>
+        <div id="up-hint" style="font-size:11.5px;color:var(--text-mute);margin-top:5px;
+                                  padding:8px 10px;background:var(--surface-2);
+                                  border-radius:var(--radius);line-height:1.55"></div>
+      </div>
+
+    </form>
+
+  </div>
+  <div class="drawer-footer">
+    <button type="submit" form="upload-form" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>
+      </svg>
+      Зберегти шаблон
+    </button>
+    <button onclick="closeDrawer()" class="btn btn-ghost">Скасувати</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Server-side assignments data ──────────────────────────────
+const ASSIGNMENTS = {{ (assignments | default({})) | tojson }};
+
+// ── Template filter tabs ──────────────────────────────────────
+function filterTpls(cat, tabEl) {
+  tabEl.closest('.status-tabs').querySelectorAll('.status-tab')
+       .forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.querySelectorAll('.tpl-card').forEach(card => {
+    card.style.display = (cat === 'all' || card.dataset.category === cat) ? '' : 'none';
+  });
+}
+
+// ── Template detail drawer ────────────────────────────────────
+function openTplDrawer(card) {
+  const t = JSON.parse(card.dataset.tpl);
+
+  document.getElementById('tdr-title').textContent = t.display;
+  document.getElementById('tdr-file').textContent  = t.filename;
+  document.getElementById('tdr-size').textContent  = t.size_kb + ' КБ';
+  document.getElementById('tdr-type').textContent  = t.ttype_label || '—';
+  document.getElementById('tdr-std').textContent   = t.is_standard ? 'Стандартний' : 'Кастомний';
+
+  // Badges
+  const badges = document.getElementById('tdr-badges');
+  let bHtml = '';
+  if (t.category === 'invoice')
+    bHtml += '<span class="pill pill-accent">Рахунок</span>';
+  else if (t.category === 'act')
+    bHtml += '<span class="pill pill-info">Акт</span>';
+  else if (t.category === 'letter')
+    bHtml += '<span class="pill pill-warning">Лист</span>';
+  if (t.ttype_label)
+    bHtml += `<span class="pill pill-mute">${t.ttype_label}</span>`;
+  if (t.is_standard)
+    bHtml += '<span class="pill pill-mute">Стандартний</span>';
+  else
+    bHtml += '<span class="pill pill-warning">Кастомний</span>';
+  badges.innerHTML = bHtml;
+
+  // Variables
+  const varsDiv = document.getElementById('tdr-vars');
+  {% raw %}
+  varsDiv.innerHTML = t.variables.length ? t.variables.map(v =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;
+                 background:var(--surface-2);border-radius:var(--radius);font-size:12.5px">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+           stroke="var(--accent-fg)" stroke-width="2.5">
+        <path d="M4 6h16M4 10h16M4 14h8M4 18h5"/>
+      </svg>
+      <code style="font-family:var(--font-mono);color:var(--text)">{{${v}}}</code>
+    </div>`
+  ).join('') : '<div style="font-size:12.5px;color:var(--text-mute);padding:6px 0">Змінні не визначені</div>';
+  {% endraw %}
+
+  // ── Contract assignments ──────────────────────────────────
+  const assigned = ASSIGNMENTS[t.filename] || [];
+  const listDiv  = document.getElementById('tdr-contract-list');
+  if (assigned.length) {
+    listDiv.innerHTML = assigned.map(c => `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  gap:8px;padding:6px 10px;background:color-mix(in oklch,var(--info) 8%,transparent);
+                  border:1px solid color-mix(in oklch,var(--info) 20%,transparent);
+                  border-radius:var(--radius);font-size:12.5px">
+        <div>
+          <div style="font-weight:500;color:var(--text)">${c.client_name}</div>
+          <div style="font-size:11px;color:var(--text-mute)">${c.contract_no}${c.contract_type ? ' · ' + c.contract_type : ''}</div>
+        </div>
+        <form method="post" action="/templates/${encodeURIComponent(t.filename)}/unassign"
+              onsubmit="return confirm('Зняти призначення шаблону для договору ${c.contract_no}?')"
+              style="flex-shrink:0">
+          <input type="hidden" name="contract_no" value="${c.contract_no}">
+          <button type="submit" class="btn btn-sm btn-ghost"
+                  style="color:var(--danger-fg);padding:2px 6px" title="Зняти призначення">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+          </button>
+        </form>
+      </div>`).join('');
+  } else {
+    listDiv.innerHTML = '<div style="font-size:12px;color:var(--text-mute);padding:4px 0">Жоден договір не використовує цей шаблон</div>';
+  }
+
+  // Show assignment section only for act templates (act templates are assignable)
+  const section = document.getElementById('tdr-contracts-section');
+  section.style.display = (t.category === 'act') ? '' : 'none';
+
+  // Wire up the assign form action
+  document.getElementById('tdr-assign-form').action =
+    '/templates/' + encodeURIComponent(t.filename) + '/assign';
+  // Reset select
+  document.getElementById('tdr-contract-select').value = '';
+
+  // Download link
+  document.getElementById('tdr-download').href =
+    '/templates/download/' + encodeURIComponent(t.filename);
+
+  openDrawer('tpl-drawer');
+}
+
+// ── Upload drawer ─────────────────────────────────────────────
+function onFileSelect(input) {
+  const f = input.files[0];
+  if (f) {
+    document.getElementById('drop-label').textContent = f.name;
+    document.getElementById('drop-zone').style.borderColor = 'var(--accent)';
+    document.getElementById('drop-zone').style.background  = 'color-mix(in oklch,var(--accent) 5%,transparent)';
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.style.borderColor = 'var(--border)';
+  const f = e.dataTransfer.files[0];
+  if (!f || !f.name.endsWith('.docx')) {
+    showToast('Потрібен файл .docx', 'danger');
+    return;
+  }
+  const input = document.getElementById('file-input');
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  input.files = dt.files;
+  onFileSelect(input);
+}
+
+// ── Upload category hint ──────────────────────────────────────
+const UPLOAD_HINTS = {
+  invoice: {
+    prefix:  'Шаблон_Рахунок_',
+    keyword: '«рахунок»',
+    color:   'var(--accent-fg)',
+    vars:    'INVOICE_NO, INVOICE_DATE, CONTRACT_NO, CLIENT_NAME, CLIENT_ADDRESS, PERIOD_FROM, PERIOD_TO, USERS, MONTHS, TARIFF, SUM, SUM_WORDS, DUE_DATE',
+  },
+  act: {
+    prefix:  'Шаблон_Акт_',
+    keyword: '«акт»',
+    color:   'var(--info-fg)',
+    vars:    'ACT_NO, ACT_DATE, CONTRACT_NO, CONTRACT_DATE, CLIENT_NAME, CLIENT_CODE, CLIENT_DIRECTOR, PERIOD_FROM, PERIOD_TO, USERS, MONTHS, TARIFF, SERVICE_SUBJECT, HOURS, HOUR_RATE, SUM, SUM_WORDS',
+  },
+  letter: {
+    prefix:  'Шаблон_Лист_',
+    keyword: '«лист» або «нагадування»',
+    color:   'var(--warning-fg)',
+    vars:    'CLIENT_NAME, CLIENT_DIRECTOR, INVOICE_NO, INVOICE_DATE, DUE_DATE, SUM, SUM_WORDS, TODAY_DATE, OUR_NAME',
+  },
+  other: {
+    prefix:  'Шаблон_',
+    keyword: null,
+    color:   'var(--text-mute)',
+    vars:    '',
+  },
+};
+
+function updateUploadHint() {
+  const cat  = document.getElementById('up-category').value;
+  const info = UPLOAD_HINTS[cat];
+  const hint = document.getElementById('up-hint');
+  if (!info) { hint.innerHTML = ''; return; }
+
+  let html = `<span style="color:${info.color};font-weight:600">Назва буде автоматично доповнена префіксом:</span> `;
+  html += `<code style="font-family:var(--font-mono)">${info.prefix}ВашаНазва.docx</code>`;
+  if (info.keyword) {
+    html += `<br>Або назвіть файл так, щоб він містив слово ${info.keyword} — тоді система розпізнає тип автоматично.`;
+  }
+  if (info.vars) {
+    html += `<br><span style="color:var(--text-mute)">Доступні змінні:</span> <code style="font-family:var(--font-mono);font-size:10.5px">${info.vars}</code>`;
+  }
+  hint.innerHTML = html;
+}
+
+// Init hint on page load
+document.addEventListener('DOMContentLoaded', updateUploadHint);
+</script>
+{% endblock %}

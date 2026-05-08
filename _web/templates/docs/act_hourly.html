@@ -1,0 +1,94 @@
+<div class="doc-page">
+
+  <!-- ── Заголовок ──────────────────────────────────── -->
+  <div class="doc-act-title">АКТ ПРИЙМАННЯ-ПЕРЕДАЧІ НАДАНИХ ПОСЛУГ № <span contenteditable="true">{{ d.act_no }}</span></div>
+
+  <div class="doc-location">
+    <span>м. Київ</span>
+    <span contenteditable="true">{{ d.act_date_str }}</span>
+  </div>
+
+  <!-- ── Сторони ─────────────────────────────────────── -->
+  <div class="doc-parties">
+    <p>
+      Фізична особа-підприємець <strong>Барабін Дмитро Володимирович</strong>
+      (ЄДРПОУ: 2770016233), що надалі іменується «<strong>Виконавець</strong>», з однієї сторони, та
+    </p>
+    <p>
+      <strong contenteditable="true">{{ d.client_name }}</strong>,
+      код <span contenteditable="true">{{ d.edrpou }}</span>,
+      в особі <span contenteditable="true">{{ d.client_director or '_______________' }}</span>,
+      що надалі іменується «<strong>Замовник</strong>», з іншої сторони,
+    </p>
+    <p>разом іменовані «Сторони», склали цей Акт про наступне:</p>
+  </div>
+
+  <!-- ── Вступ ───────────────────────────────────────── -->
+  <p class="doc-intro">
+    На підставі Договору № <span contenteditable="true">{{ d.contract_no }}</span>
+    від <span contenteditable="true">{{ d.contract_date_str }}</span>
+    Виконавець надав, а Замовник прийняв такі послуги:
+  </p>
+
+  <!-- ── Таблиця послуг ───────────────────────────────── -->
+  <table class="doc-svc">
+    <thead>
+      <tr>
+        <th class="c-no">№</th>
+        <th class="c-desc">Найменування послуги</th>
+        <th class="c-unit">Од. вим.</th>
+        <th class="c-qty">Кількість</th>
+        <th class="c-price">Ціна, грн</th>
+        <th class="c-sum">Сума, грн</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="c-no">1</td>
+        <td class="c-desc" contenteditable="true">{{ d.subject or 'Розробка програмного забезпечення' }} (згідно Договору № {{ d.contract_no }} від {{ d.contract_date_str }})</td>
+        <td class="c-unit">год.</td>
+        <td class="c-qty" contenteditable="true">{{ d.hours }}</td>
+        <td class="c-price" contenteditable="true">{{ d.hour_rate_str }}</td>
+        <td class="c-sum" contenteditable="true">{{ d.sum_str }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── Підсумки ─────────────────────────────────────── -->
+  <table class="doc-totals">
+    <tr class="t-bold">
+      <td class="t-lbl">Разом:</td>
+      <td class="t-val" contenteditable="true">{{ d.sum_str }}</td>
+    </tr>
+  </table>
+
+  <!-- ── Правовий текст ─────────────────────────────── -->
+  <div class="doc-legal">
+    <p>
+      Вартість послуг складає
+      <strong contenteditable="true">{{ d.sum_str }}</strong>
+      (<span contenteditable="true">{{ d.sum_words }}</span>), без ПДВ.
+    </p>
+    <p>Сторони підтверджують відсутність претензій щодо обсягу та якості послуг.</p>
+    <p>Послуги вважаються наданими в повному обсязі з дати підписання цього Акту.</p>
+  </div>
+
+  <!-- ── Підписи ─────────────────────────────────────── -->
+  <table class="doc-sigs">
+    <tr>
+      <td>
+        <div class="doc-sig-role">Виконавець</div>
+        <div class="doc-sig-org">ФОП Барабін Д.В.</div>
+        <div class="doc-sig-code">ЄДРПОУ: 2770016233</div>
+        <div class="doc-sig-line">_____/Д. Барабін/</div>
+      </td>
+      <td>
+        <div class="doc-sig-role">Замовник</div>
+        <div class="doc-sig-org" contenteditable="true">{{ d.client_name }}</div>
+        <div class="doc-sig-code">Код: <span contenteditable="true">{{ d.edrpou }}</span></div>
+        <div class="doc-sig-line">_____/<span contenteditable="true">{{ d.client_director or '_______________' }}</span>/</div>
+      </td>
+    </tr>
+  </table>
+
+</div>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+
+<div style="max-width:560px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+    <a href="/clients" style="color:#94a3b8;text-decoration:none;font-size:13px">← Клієнти</a>
+    <span style="color:#e2e8f0">/</span>
+    <h1 style="font-size:18px;font-weight:700;color:#0f172a;margin:0">{{ title }}</h1>
+  </div>
+
+  <div class="card">
+    <form method="post" style="display:flex;flex-direction:column;gap:14px">
+      {% if not client %}
+      <div class="field">
+        <label>ЄДРПОУ *</label>
+        <input type="text" name="edrpou" required maxlength="20" placeholder="12345678"/>
+      </div>
+      {% endif %}
+      <div class="field">
+        <label>Назва організації *</label>
+        <input type="text" name="name" value="{{ client.name if client else '' }}" required/>
+      </div>
+      <div class="field">
+        <label>Директор</label>
+        <input type="text" name="director" value="{{ client.director if client else '' }}"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field">
+          <label>Email</label>
+          <input type="text" name="email" value="{{ client.email if client else '' }}"/>
+        </div>
+        <div class="field">
+          <label>Телефон</label>
+          <input type="text" name="phone" value="{{ client.phone if client else '' }}"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Адреса</label>
+        <input type="text" name="address" value="{{ client.address if client else '' }}"/>
+      </div>
+      <div class="field">
+        <label>Статус</label>
+        <select name="status">
+          <option value="Активний"   {% if not client or client.status == 'Активний' %}selected{% endif %}>Активний</option>
+          <option value="Неактивний" {% if client and client.status == 'Неактивний' %}selected{% endif %}>Неактивний</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;padding-top:4px">
+        <button type="submit" class="btn btn-primary">💾 Зберегти</button>
+        <a href="/clients" class="btn btn-ghost">Скасувати</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

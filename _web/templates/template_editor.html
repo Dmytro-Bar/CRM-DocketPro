@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{% if editing %}Редагувати шаблон{% else %}Створити шаблон{% endif %} — DocketPro CRM{% endblock %}
+
+{% block page_title %}{% if editing %}Редагувати шаблон{% else %}Новий шаблон{% endif %}{% endblock %}
+{% block page_sub %}Текстовий редактор з підтримкою змінних{% endblock %}
+
+{% block topbar_actions %}
+<a href="/templates" class="btn btn-ghost">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M19 12H5M12 19l-7-7 7-7"/>
+  </svg>
+  Назад
+</a>
+<input id="inp-tpl-name" type="text"
+       style="width:220px;padding:5px 10px;border:1px solid var(--border);
+              border-radius:var(--radius);font-size:13px;background:var(--surface)"
+       placeholder="Назва шаблону"
+       value="{{ filename }}">
+<select id="sel-doc-type"
+        style="padding:5px 10px;border:1px solid var(--border);
+               border-radius:var(--radius);font-size:13px;background:var(--surface)">
+  <option value="Рахунок Доступ">Рахунок Доступ</option>
+  <option value="Рахунок Погодинно">Рахунок Погодинно</option>
+  <option value="Акт Доступ">Акт Доступ</option>
+  <option value="Акт Погодинно">Акт Погодинно</option>
+  <option value="Лист">Лист</option>
+  <option value="Інший">Інший</option>
+</select>
+<button class="btn btn-primary" onclick="submitTplForm()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+    <path d="M17 21v-8H7v8M7 3v5h8"/>
+  </svg>
+  Зберегти шаблон
+</button>
+{% endblock %}
+
+{% block content %}
+
+<form id="tpl-form" method="post" action="/templates/create-save">
+  <input type="hidden" id="h-tpl-name" name="tpl_name">
+  <input type="hidden" id="h-doc-type" name="doc_type">
+
+  <div style="display:flex;gap:20px;align-items:flex-start">
+
+    {# ── LEFT: Variable panel ──────────────────────────────── #}
+    <div style="width:260px;flex-shrink:0;position:sticky;top:80px">
+      <div style="background:var(--surface);border:1px solid var(--border);
+                  border-radius:var(--radius);overflow:hidden">
+
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);
+                    background:var(--surface-2)">
+          <div style="font-size:12px;font-weight:700;color:var(--text);
+                      text-transform:uppercase;letter-spacing:.06em">Змінні</div>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:2px">
+            Клікніть щоб вставити
+          </div>
+        </div>
+
+        <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
+
+          {# Документ #}
+          <div>
+            <div class="var-group-label">Документ</div>
+            <div class="var-group-btns">
+              {% for v in ["INVOICE_NO","ACT_NO","CONTRACT_NO","CONTRACT_DATE","INVOICE_DATE","ACT_DATE"] %}
+              <button type="button" class="var-btn" onclick="insertVar('{{ v }}')">{{ v }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Клієнт #}
+          <div>
+            <div class="var-group-label">Клієнт</div>
+            <div class="var-group-btns">
+              {% for v in ["CLIENT_NAME","CLIENT_CODE","CLIENT_ADDRESS","CLIENT_DIRECTOR"] %}
+              <button type="button" class="var-btn" onclick="insertVar('{{ v }}')">{{ v }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Дати #}
+          <div>
+            <div class="var-group-label">Дати</div>
+            <div class="var-group-btns">
+              {% for v in ["PERIOD_FROM","PERIOD_TO","DUE_DATE","DUE_LINE","TODAY_DATE"] %}
+              <button type="button" class="var-btn" onclick="insertVar('{{ v }}')">{{ v }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Послуги #}
+          <div>
+            <div class="var-group-label">Послуги</div>
+            <div class="var-group-btns">
+              {% for v in ["SERVICE_SUBJECT","USERS","MONTHS","HOURS","HOUR_RATE","TARIFF"] %}
+              <button type="button" class="var-btn" onclick="insertVar('{{ v }}')">{{ v }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Сума #}
+          <div>
+            <div class="var-group-label">Сума</div>
+            <div class="var-group-btns">
+              {% for v in ["SUM","SUM_WORDS","DISCOUNT_LINE"] %}
+              <button type="button" class="var-btn" onclick="insertVar('{{ v }}')">{{ v }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Підпис #}
+          <div>
+            <div class="var-group-label">Підпис</div>
+            <div class="var-group-btns">
+              {% for v in ["OUR_NAME"] %}
+              <button type="button" class="var-btn" onclick="insertVar('{{ v }}')">{{ v }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+        </div>
+
+        <div style="padding:10px 14px 12px;border-top:1px solid var(--border);
+                    font-size:10.5px;color:var(--text-mute);line-height:1.5">
+          Синтаксис: <code style="font-family:var(--font-mono)">&#123;&#123;ЗМІННА&#125;&#125;</code><br>
+          Заголовки: <code style="font-family:var(--font-mono)"># H1 &nbsp;## H2 &nbsp;### H3</code>
+        </div>
+      </div>
+    </div>
+
+    {# ── RIGHT: A4 editor ────────────────────────────────────── #}
+    <div style="background:#d1d5db;padding:24px 16px;flex:1;border-radius:var(--radius)">
+      <div style="background:white;max-width:210mm;margin:0 auto;padding:20mm 22mm;
+                  box-shadow:0 4px 20px rgba(0,0,0,.15);min-height:297mm">
+        <textarea id="tpl-content" name="content"
+                  style="width:100%;min-height:240mm;border:none;outline:none;
+                         font-family:'Times New Roman',Times,serif;font-size:11pt;
+                         line-height:1.6;resize:none;color:#000;background:transparent;
+                         box-sizing:border-box"
+                  placeholder="{% raw %}Введіть текст шаблону тут...
+Натискайте кнопки зліва щоб вставляти {{ЗМІННА}}.
+
+Приклад:
+# Акт № {{ACT_NO}} від {{ACT_DATE}}
+
+Виконавець надав, а Замовник — {{CLIENT_NAME}} прийняв послуги
+згідно Договору № {{CONTRACT_NO}} від {{CONTRACT_DATE}}.
+
+Послуга: {{SERVICE_SUBJECT}}
+Кількість користувачів: {{USERS}}
+Тариф: {{TARIFF}} грн/міс
+Сума: {{SUM}} грн
+Сума словами: {{SUM_WORDS}}{% endraw %}">{{ initial_content }}</textarea>
+      </div>
+    </div>
+
+  </div>{# /flex row #}
+</form>
+
+<style>
+.var-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-mute);
+  margin-bottom: 5px;
+}
+.var-group-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.var-btn {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--accent) 8%, transparent);
+  color: var(--accent-fg);
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  line-height: 1.4;
+}
+.var-btn:hover {
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function insertVar(varName) {
+  const ta = document.getElementById('tpl-content');
+  ta.focus();
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const text  = ta.value;
+  const ins   = '{{' + varName + '}}';
+  ta.value = text.substring(0, start) + ins + text.substring(end);
+  ta.selectionStart = ta.selectionEnd = start + ins.length;
+}
+
+function submitTplForm() {
+  const name = document.getElementById('inp-tpl-name').value.trim();
+  if (!name) {
+    document.getElementById('inp-tpl-name').focus();
+    document.getElementById('inp-tpl-name').style.borderColor = 'var(--danger)';
+    return;
+  }
+  document.getElementById('h-tpl-name').value = name;
+  document.getElementById('h-doc-type').value = document.getElementById('sel-doc-type').value;
+  document.getElementById('tpl-form').submit();
+}
+
+// Reset validation styling on input
+document.getElementById('inp-tpl-name').addEventListener('input', function() {
+  this.style.borderColor = '';
+});
+</script>
+{% endblock %}

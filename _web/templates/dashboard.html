@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+{% block title %}Дашборд — DocketPro CRM{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js" defer></script>
+{% endblock %}
+
+{% block page_title %}Дашборд{% endblock %}
+{% block page_sub %}{{ date_from.strftime('%d.%m.%Y') }} — {{ date_to.strftime('%d.%m.%Y') }}{% endblock %}
+
+{% block topbar_actions %}
+{# Period presets #}
+<div class="seg">
+  <button type="button" class="{{ 'active' if active_period == 'week' else '' }}"
+          onclick="navPeriod('week')">Тиждень</button>
+  <button type="button" class="{{ 'active' if active_period == 'month' else '' }}"
+          onclick="navPeriod('month')">Місяць</button>
+  <button type="button" class="{{ 'active' if active_period == 'quarter' else '' }}"
+          onclick="navPeriod('quarter')">Квартал</button>
+  <button type="button" class="{{ 'active' if active_period == 'year' else '' }}"
+          onclick="navPeriod('year')">Рік</button>
+</div>
+
+{# Date range + client filter #}
+<form method="get" id="dash-form" style="display:flex;align-items:center;gap:6px">
+  <input type="date" name="date_from" value="{{ date_from.strftime('%Y-%m-%d') }}"
+         style="border:1px solid var(--border);border-radius:var(--radius);padding:5px 8px;font-size:12.5px;font-family:inherit;color:var(--text);background:var(--surface);outline:none">
+  <span style="color:var(--text-mute);font-size:12px">—</span>
+  <input type="date" name="date_to" value="{{ date_to.strftime('%Y-%m-%d') }}"
+         style="border:1px solid var(--border);border-radius:var(--radius);padding:5px 8px;font-size:12.5px;font-family:inherit;color:var(--text);background:var(--surface);outline:none">
+  <select name="client" onchange="this.form.submit()"
+          style="border:1px solid var(--border);border-radius:var(--radius);padding:5px 9px;font-size:12.5px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;min-width:140px">
+    <option value="">Всі клієнти</option>
+    {% for cn in client_names %}
+      <option value="{{ cn }}" {% if cn == client_filter %}selected{% endif %}>{{ cn }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary btn-sm">→</button>
+</form>
+
+<a href="/invoices/new" class="btn btn-primary">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+  Новий рахунок
+</a>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Strip (5 cards) ──────────────────────────────────────── #}
+{% set unpaid_list = all_invoices | selectattr('status', 'ne', 'Оплачено') | list %}
+
+<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">
+
+  <div class="kpi featured">
+    <div class="kpi-label">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Очікується
+    </div>
+    <div class="kpi-value">₴{{ fmt_money(debt_pending) }}</div>
+    <div class="kpi-meta">{{ unpaid_list|selectattr('is_overdue','equalto',False)|list|length }} не прострочено</div>
+  </div>
+
+  <div class="kpi">
+    <div class="kpi-label">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a3 3 0 0 0 3 3h13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H6a3 3 0 0 1-3-3v0a3 3 0 0 1 3-3h11"/><circle cx="17" cy="13" r="1.2"/></svg>
+      Виставлено
+    </div>
+    <div class="kpi-value">₴{{ fmt_money(inv_period) }}</div>
+    <div class="kpi-meta">за поточний період</div>
+  </div>
+
+  <div class="kpi">
+    <div class="kpi-label" style="color:var(--success-fg)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+      Оплачено
+    </div>
+    <div class="kpi-value" style="color:var(--success-fg)">₴{{ fmt_money(paid_period) }}</div>
+    <div class="kpi-meta">ROI: {{ "%.1f"|format(roi) }}%</div>
+  </div>
+
+  <div class="kpi" {% if debt_real > 0 %}style="border-color:var(--danger-soft)"{% endif %}>
+    <div class="kpi-label" style="color:{% if debt_real > 0 %}var(--danger-fg){% else %}var(--text-mute){% endif %}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+      Прострочено
+    </div>
+    <div class="kpi-value" style="color:{% if debt_real > 0 %}var(--danger-fg){% else %}var(--text-mute){% endif %}">₴{{ fmt_money(debt_real) }}</div>
+    <div class="kpi-meta">{{ unpaid_list|selectattr('is_overdue')|list|length }} прострочених</div>
+  </div>
+
+  <div class="kpi">
+    <div class="kpi-label">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      Договорів
+    </div>
+    <div class="kpi-value">{{ contracts_active }}</div>
+    <div class="kpi-meta">{{ total_users }} кор. · {{ client_names|length }} клієнтів</div>
+  </div>
+
+</div>
+
+{# ── Attention banner ─────────────────────────────────────────── #}
+{% set has_attn = (debt_real > 0) or (acts_unsigned > 0) or (next_acts|length > 0) %}
+{% if has_attn %}
+<div class="attn">
+  <div class="attn-head">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-strong)">
+      <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </svg>
+    <h2>Потребує вашої уваги</h2>
+  </div>
+  <div class="attn-grid">
+    <div class="attn-card">
+      <div class="label" style="color:var(--danger-fg)">Прострочено</div>
+      <div class="value" style="color:var(--danger-fg)">₴{{ fmt_money(debt_real) }}</div>
+      <div class="ftr">
+        <span class="dot" style="background:var(--danger)"></span>
+        {{ unpaid_list|selectattr('is_overdue')|list|length }} рахунки · нагадайте клієнтам
+      </div>
+    </div>
+    <div class="attn-card">
+      <div class="label" style="color:var(--warning-fg)">Акти без підпису</div>
+      <div class="value">{{ sent_unsigned_acts|length }}</div>
+      <div class="ftr">
+        <span class="dot" style="background:var(--warning)"></span>
+        Надіслано клієнтам · потребують підпису
+      </div>
+    </div>
+    <div class="attn-card">
+      <div class="label" style="color:var(--info-fg)">Рахунки без акту</div>
+      <div class="value">{{ next_acts|length }}</div>
+      <div class="ftr">
+        <span class="dot" style="background:var(--info)"></span>
+        ₴{{ fmt_money(next_acts|sum(attribute='sum_uah')) }} · згенеруйте акт
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Urgency pill macro ───────────────────────────────────────── #}
+{% macro upill(urgency, days) %}
+  {% if urgency == 'overdue' %}<span class="pill pill-danger" style="font-size:10.5px">прострочено {{ (-days) }} дн.</span>
+  {% elif urgency == 'urgent' %}<span class="pill pill-danger" style="font-size:10.5px">через {{ days }} дн.</span>
+  {% elif urgency == 'soon'   %}<span class="pill pill-warning" style="font-size:10.5px">через {{ days }} дн.</span>
+  {% else %}<span class="pill pill-mute" style="font-size:10.5px">через {{ days }} дн.</span>
+  {% endif %}
+{% endmacro %}
+
+{# ── grid-2: Час виставити | Час підготувати акт ─────────────── #}
+<div class="grid-2">
+
+  <div class="card">
+    <div class="card-head">
+      <h3>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--accent)"><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+        Час виставити рахунок
+        <span class="count">{{ next_invoices|length }}</span>
+      </h3>
+      <a href="/invoices/new" class="btn btn-secondary btn-sm">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Новий рахунок
+      </a>
+    </div>
+    {% if next_invoices %}
+    <div class="card-body flush">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:24%">Договір</th>
+          <th>Клієнт</th>
+          <th style="width:115px">До кінця місяця</th>
+          <th class="num" style="width:110px">Тариф</th>
+          <th style="text-align:center;width:150px">Виставити</th>
+        </tr></thead>
+        <tbody>
+        {% for ni in next_invoices %}
+        <tr {% if ni.urgency=='overdue' %}style="background:color-mix(in oklch,var(--danger-soft) 30%,transparent)"
+            {% elif ni.urgency=='urgent' %}style="background:color-mix(in oklch,var(--danger-soft) 15%,transparent)"
+            {% elif ni.urgency=='soon' %}style="background:color-mix(in oklch,var(--warning-soft) 20%,transparent)"{% endif %}>
+          <td class="mono" style="color:var(--accent-fg);font-size:11.5px">{{ ni.contract }}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px">{{ ni.client }}</td>
+          <td style="font-size:11.5px;color:var(--text-mute);white-space:nowrap">{{ fmt_date(ni.next_end) }}</td>
+          <td class="num" style="font-size:12px">{{ ni.tariff }}</td>
+          <td style="text-align:center">{{ upill(ni.urgency, ni.days_left) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">Немає активних договорів Доступ</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--info-fg)"><path d="M5 19V5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M9 14l2 2 4-4"/></svg>
+        Час підготувати акт
+        <span class="count">{{ next_acts|length }}</span>
+      </h3>
+      <a href="/acts/new" class="btn btn-secondary btn-sm">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Новий акт
+      </a>
+    </div>
+    {% if next_acts %}
+    <div class="card-body flush">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:24%">Рахунок</th>
+          <th>Клієнт</th>
+          <th style="width:100px">Період до</th>
+          <th class="num" style="width:110px">Сума</th>
+          <th style="text-align:center;width:150px">Підготувати</th>
+        </tr></thead>
+        <tbody>
+        {% for na in next_acts %}
+        <tr {% if na.urgency=='overdue' %}style="background:color-mix(in oklch,var(--danger-soft) 30%,transparent)"
+            {% elif na.urgency=='urgent' %}style="background:color-mix(in oklch,var(--danger-soft) 15%,transparent)"
+            {% elif na.urgency=='soon' %}style="background:color-mix(in oklch,var(--warning-soft) 20%,transparent)"{% endif %}>
+          <td>
+            <a href="/acts/new?invoice_no={{ na.inv_no }}"
+               class="mono" style="color:var(--accent-fg);font-size:11.5px;text-decoration:none">{{ na.inv_no }}</a>
+          </td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px">{{ na.client }}</td>
+          <td style="font-size:11.5px;color:var(--text-mute)">{{ fmt_date(na.period_to) }}</td>
+          <td class="num" style="font-size:12px">₴{{ fmt_money(na.sum_uah) }}</td>
+          <td style="text-align:center">{{ upill(na.urgency, na.days_left) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--success);margin:0 auto 6px;display:block"><path d="M4 12l5 5L20 6"/></svg>
+      Всі рахунки мають акти
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Тренд — повна ширина (лише Доступ) ──────────────────────── #}
+<div class="card" style="margin-top:var(--gap);overflow:hidden">
+  <div class="card-head">
+    <h3>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--accent)"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+      Дохід та витрати
+      <span class="count">Доступ · останні 6 місяців</span>
+    </h3>
+    <div style="display:flex;align-items:center;gap:12px;font-size:11.5px;color:var(--text-mute)">
+      <span style="display:inline-flex;align-items:center;gap:5px">
+        <span style="width:10px;height:3px;border-radius:2px;background:oklch(0.55 0.22 264);display:inline-block"></span>
+        Дохід (ліва вісь)
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:5px">
+        <span style="width:10px;height:10px;border-radius:2px;background:oklch(0.65 0.22 25 / 0.35);border:1px solid oklch(0.65 0.22 25 / 0.7);display:inline-block"></span>
+        Витрати (права вісь)
+      </span>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="trendChart" style="width:100%;height:260px;display:block"></canvas>
+  </div>
+</div>
+
+{# ── Останні події — стрічки, повна ширина ───────────────────── #}
+<div class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <h3>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--text-mute)"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Останні події
+      <span class="count">{{ activity|length }}</span>
+    </h3>
+  </div>
+  {% if activity %}
+  <div>
+    {% for a in activity %}
+    <div style="display:grid;grid-template-columns:130px 1fr;align-items:center;padding:10px 18px;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}gap:14px;transition:background .1s"
+         onmouseenter="this.style.background='var(--bg-soft)'" onmouseleave="this.style.background=''">
+      <div style="font-size:11.5px;color:var(--text-mute);font-family:var(--font-mono)">{{ a.when }}</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text)">
+        <span class="pill
+          {% if a.type == 'payment' %}pill-success
+          {% elif a.type == 'act_signed' %}pill-success
+          {% elif a.type == 'act_sent' %}pill-info
+          {% elif a.type == 'act_created' %}pill-mute
+          {% elif a.type == 'invoice' %}pill-accent
+          {% elif a.type == 'expense' %}pill-mute
+          {% else %}pill-info{% endif %}"
+              style="border-radius:8px;flex-shrink:0;padding:4px;display:flex;align-items:center">
+          {% if a.type == 'payment' %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          {% elif a.type == 'act_signed' %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg>
+          {% elif a.type == 'act_sent' %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+          {% elif a.type == 'act_created' %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19V5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></svg>
+          {% elif a.type == 'invoice' %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z"/></svg>
+          {% elif a.type == 'expense' %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5C9 8 10.5 7 12 7s3 .8 3 2.2c0 2.6-6 1.4-6 4 0 1.4 1.5 2.3 3 2.3s3-.8 3-2.2"/></svg>
+          {% else %}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          {% endif %}
+        </span>
+        <span>{{ a.text }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty" style="padding:36px">Подій за останні 30 днів не знайдено</div>
+  {% endif %}
+</div>
+
+{# ── Договори що закінчуються — повна ширина ─────────────────── #}
+{% if expiring_contracts %}
+<div class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <h3>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--warning-fg)"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Договори що закінчуються
+      <span class="count">{{ expiring_contracts|length }} · ≤ 60 днів</span>
+    </h3>
+  </div>
+  <div class="card-body">
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for e in expiring_contracts %}
+        {% if e.days_left <= 14 %}{% set pc="pill-danger" %}
+        {% elif e.days_left <= 30 %}{% set pc="pill-warning" %}
+        {% else %}{% set pc="pill-mute" %}{% endif %}
+      <a href="/contracts/{{ e.contract_no }}/edit"
+         style="display:inline-flex;align-items:center;gap:8px;background:var(--surface);
+                border:1px solid var(--border);border-radius:var(--radius);
+                padding:7px 12px;text-decoration:none;font-size:12.5px;
+                transition:box-shadow .12s"
+         onmouseenter="this.style.boxShadow='var(--shadow-sm)'"
+         onmouseleave="this.style.boxShadow=''">
+        <span class="mono" style="color:var(--accent-fg);font-size:11.5px">{{ e.contract_no }}</span>
+        <span style="color:var(--text-soft)">{{ e.client_name }}</span>
+        <span class="pill {{ pc }}">{{ e.days_left }} дн.</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Фінансова смуга ──────────────────────────────────────────── #}
+<div class="grid-3" style="margin-top:var(--gap)">
+  <div class="card" style="padding:16px 18px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:12.5px;color:var(--text-soft);font-weight:500">Витрати всього</div>
+    <div style="font-size:15px;font-weight:600;font-family:var(--font-mono);color:var(--text)">₴{{ fmt_money(expenses_all_time) }}</div>
+  </div>
+  <div class="card" style="padding:16px 18px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:12.5px;color:var(--text-soft);font-weight:500">Дохід Доступ (all time)</div>
+    <div style="font-size:15px;font-weight:600;font-family:var(--font-mono);color:var(--info-fg)">₴{{ fmt_money(access_revenue_all_time) }}</div>
+  </div>
+  <div class="card" style="padding:16px 18px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:12.5px;color:var(--text-soft);font-weight:500">Через LiqPay (all time)</div>
+    <div style="font-size:15px;font-weight:600;font-family:var(--font-mono);color:var(--success-fg)">₴{{ fmt_money(app_revenue_all_time) }}</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Period navigation ─────────────────────────────────────────
+function navPeriod(p) {
+  const url = new URL('/', window.location.origin);
+  url.searchParams.set('period', p);
+  const sel = document.querySelector('#dash-form select[name=client]');
+  if (sel && sel.value) url.searchParams.set('client', sel.value);
+  window.location = url.toString();
+}
+
+// ── Trend Chart (Chart.js + chartjs-plugin-datalabels) ───────
+document.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById('trendChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  // Register datalabels plugin if loaded
+  if (typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+  }
+
+  const labels   = [{% for t in trend %}'{{ t.label }}'{% if not loop.last %},{% endif %}{% endfor %}];
+  const incomes  = [{% for t in trend %}{{ t.income }}{% if not loop.last %},{% endif %}{% endfor %}];
+  const expenses = [{% for t in trend %}{{ t.expenses }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+  function fmtK(v) {
+    if (v >= 1000000) return (v / 1000000).toFixed(1) + 'М';
+    if (v >= 1000)    return Math.round(v / 1000) + 'К';
+    return v > 0 ? String(Math.round(v)) : '';
+  }
+
+  new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'line',
+          label: 'Дохід (Доступ)',
+          data: incomes,
+          borderColor:          'oklch(0.55 0.22 264)',
+          backgroundColor:      'oklch(0.55 0.22 264 / 0.10)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: '#fff',
+          pointBorderColor:     'oklch(0.55 0.22 264)',
+          pointBorderWidth: 2,
+          borderWidth: 2.5,
+          yAxisID: 'y',
+          order: 2,
+          datalabels: {
+            anchor: 'end',
+            align: 'top',
+            offset: 5,
+            color: 'oklch(0.40 0.20 264)',
+            font: { size: 9.5, weight: '600' },
+            formatter: v => v > 0 ? '₴' + fmtK(v) : '',
+          },
+        },
+        {
+          type: 'bar',
+          label: 'Витрати',
+          data: expenses,
+          backgroundColor: 'oklch(0.65 0.22 25 / 0.28)',
+          borderColor:     'oklch(0.65 0.22 25 / 0.65)',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y1',
+          order: 1,
+          datalabels: {
+            anchor: 'end',
+            align: 'top',
+            offset: 5,
+            color: 'oklch(0.45 0.15 25)',
+            font: { size: 9.5, weight: '600' },
+            formatter: v => v > 0 ? '₴' + fmtK(v) : '',
+          },
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 24 } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        datalabels: {},
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ₴' + Math.round(ctx.parsed.y).toLocaleString('uk-UA') +
+                          (ctx.datasetIndex === 0 ? ' (дохід)' : ' (витрати)'),
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: 'var(--font-mono)', size: 10 }, color: '#888' },
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          grid: { color: 'rgba(0,0,0,0.06)' },
+          ticks: {
+            font: { family: 'var(--font-mono)', size: 10 },
+            color: 'oklch(0.55 0.22 264)',
+            callback: v => '₴' + fmtK(v),
+          },
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: {
+            font: { family: 'var(--font-mono)', size: 10 },
+            color: 'oklch(0.55 0.15 25)',
+            callback: v => '₴' + fmtK(v),
+          },
+        },
+      },
+    },
+  });
+});
+</script>
+{% endblock %}

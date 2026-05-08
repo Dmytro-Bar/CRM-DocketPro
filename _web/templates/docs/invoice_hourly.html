@@ -1,0 +1,75 @@
+<div class="doc-page">
+
+  <!-- ── Шапка: Виконавець | Платник ───────────────────── -->
+  <table class="doc-hdr">
+    <tr>
+      <td class="doc-hdr-exec">
+        <div class="doc-cap">Постачальник послуг</div>
+        <div class="doc-org">Фізична особа-підприємець<br>Барабін Дмитро Володимирович</div>
+        <p class="doc-detail">ЄДРПОУ: 2770016233</p>
+        <p class="doc-detail">IBAN: UA393220010000026000370081356</p>
+        <p class="doc-detail">Банк: АТ «УНІВЕРСАЛ БАНК»</p>
+        <p class="doc-detail" style="margin-top:3px;">Виконавець — платник єдиного податку 3 групи. Без ПДВ.</p>
+      </td>
+      <td class="doc-hdr-pay">
+        <div class="doc-cap">Платник</div>
+        <div class="doc-org" contenteditable="true">{{ d.client_name }}</div>
+        {% if d.client_address %}
+        <div class="doc-detail" contenteditable="true">{{ d.client_address }}</div>
+        {% else %}
+        <div class="doc-detail" contenteditable="true" style="color:#aaa; font-style:italic;">адреса клієнта</div>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── Назва документу ─────────────────────────────── -->
+  <div class="doc-title">Рахунок № <span contenteditable="true">{{ d.invoice_no }}</span> від <span contenteditable="true">{{ d.invoice_date_str }}</span></div>
+
+  <!-- ── Підстава ────────────────────────────────────── -->
+  <p class="doc-base">Підстава: Договір № <span contenteditable="true">{{ d.contract_no }}</span> від <span contenteditable="true">{{ d.contract_date_str }}</span></p>
+
+  <!-- ── Таблиця послуг ───────────────────────────────── -->
+  <table class="doc-svc">
+    <thead>
+      <tr>
+        <th class="c-no">№</th>
+        <th class="c-desc">Найменування послуги</th>
+        <th class="c-unit">Од. вим.</th>
+        <th class="c-qty">Кількість</th>
+        <th class="c-price">Ціна, грн</th>
+        <th class="c-sum">Сума, грн</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="c-no">1</td>
+        <td class="c-desc" contenteditable="true">{{ d.subject or 'Розробка програмного забезпечення' }} (згідно Договору № {{ d.contract_no }} від {{ d.contract_date_str }})</td>
+        <td class="c-unit">год.</td>
+        <td class="c-qty" contenteditable="true">{{ d.hours }}</td>
+        <td class="c-price" contenteditable="true">{{ d.hour_rate_str }}</td>
+        <td class="c-sum" contenteditable="true">{{ d.sum_str }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── Підсумки ─────────────────────────────────────── -->
+  <table class="doc-totals">
+    <tr class="t-bold">
+      <td class="t-lbl">Разом:</td>
+      <td class="t-val" contenteditable="true">{{ d.sum_str }}</td>
+    </tr>
+  </table>
+
+  <p class="doc-sumwords">Всього до сплати: <span contenteditable="true">{{ d.sum_words }}</span></p>
+  <p class="doc-due">Сплатити до: <strong contenteditable="true">{{ d.due_date_str }}</strong></p>
+
+  <!-- ── Підпис ──────────────────────────────────────── -->
+  <div class="doc-sig-solo">
+    <div class="doc-sig-solo-inner">
+      <div class="doc-sig-solo-name">ФОП Барабін Д.В.</div>
+      <div class="doc-sig-solo-line">підпис</div>
+    </div>
+  </div>
+
+</div>

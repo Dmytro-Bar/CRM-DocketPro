@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+
+<div style="max-width:600px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+    <a href="/invoices" style="color:#94a3b8;text-decoration:none;font-size:13px">← Рахунки</a>
+    <span style="color:#e2e8f0">/</span>
+    <h1 style="font-size:18px;font-weight:700;color:#0f172a;margin:0">{{ title }}</h1>
+  </div>
+
+  <div class="card">
+    <form method="post" id="inv-form" style="display:flex;flex-direction:column;gap:16px">
+
+      {# ── Договір ── #}
+      <div class="field">
+        <label>Договір *</label>
+        <select name="contract_no" id="contract_sel" required onchange="onContractChange(this)">
+          <option value="">— оберіть договір —</option>
+          {% for c in contracts %}
+          <option value="{{ c.contract_no }}"
+                  data-type="{{ c.contract_type }}"
+                  data-currency="{{ c.currency }}"
+                  data-tariff="{{ c.tariff_fx }}"
+                  data-users="{{ c.users }}"
+                  data-hourrate="{{ c.hour_rate or 0 }}"
+                  {% if contract and contract.contract_no == c.contract_no %}selected{% endif %}>
+            {{ c.contract_no }} — {{ c.client_name }}
+            ({{ norm(c.contract_type) }}, {{ c.tariff_fx }} {{ c.currency }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# ── Дата рахунку ── #}
+      <div class="field" style="width:160px">
+        <label>Дата рахунку *</label>
+        <input type="text" name="invoice_date" id="invoice_date"
+               value="{{ today_str }}" placeholder="дд.мм.рррр" required/>
+      </div>
+
+      {# ── ACCESS поля ── #}
+      <div id="access-fields" style="display:none;flex-direction:column;gap:14px">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="field">
+            <label>Період з</label>
+            <input type="text" name="period_from" id="period_from"
+                   placeholder="дд.мм.рррр" oninput="calcPreview()"/>
+          </div>
+          <div class="field">
+            <label>Період по</label>
+            <input type="text" name="period_to" id="period_to"
+                   placeholder="дд.мм.рррр" oninput="calcPreview()"/>
+          </div>
+        </div>
+
+        {# Швидкий вибір #}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#94a3b8">Швидкий вибір:</span>
+          {% for n, lbl in [(1,"1 міс"),(2,"2 міс"),(3,"3 міс"),(6,"6 міс"),(12,"12 міс")] %}
+          <button type="button" onclick="setPeriod({{ n }})"
+                  style="font-size:12px;padding:3px 10px;border:1px solid #e2e8f0;border-radius:6px;
+                         background:#f8fafc;cursor:pointer;color:#334155">{{ lbl }}</button>
+          {% endfor %}
+        </div>
+
+        {# Курс — показується тільки для USD/EUR #}
+        <div id="rate-wrap" style="display:none">
+          <div class="field" style="width:180px">
+            <label id="rate-label">Курс НБУ (USD)</label>
+            <input type="number" step="0.01" name="fx_rate" id="fx_rate"
+                   value="0" placeholder="0" oninput="calcPreview()"/>
+          </div>
+        </div>
+
+        <div class="field" style="width:140px">
+          <label>Знижка, %</label>
+          <input type="number" step="0.01" name="discount_pct" id="discount_pct"
+                 value="0" min="0" max="100" oninput="calcPreview()"/>
+        </div>
+
+      </div>
+
+      {# ── HOURLY поля ── #}
+      <div id="hourly-fields" style="display:none;flex-direction:column;gap:14px">
+        <div class="field" style="width:160px">
+          <label>Кількість годин</label>
+          <input type="number" name="hours" id="hours"
+                 value="" min="0.5" step="0.5" oninput="calcPreview()"/>
+        </div>
+      </div>
+
+      {# ── Блок попереднього розрахунку ── #}
+      <div id="calc-block" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;
+                                   border-radius:10px;padding:14px 16px">
+        <div style="font-size:12px;font-weight:600;color:#0369a1;margin-bottom:8px">
+          📊 Попередній розрахунок
+        </div>
+        <div id="calc-lines" style="font-size:13px;color:#0f172a;line-height:1.8"></div>
+        <div id="calc-hint" style="margin-top:8px;font-size:12px;color:#d97706"></div>
+      </div>
+
+      {# ── Кнопки ── #}
+      <div style="display:flex;gap:10px;padding-top:4px">
+        <button type="submit" id="submit-btn" class="btn btn-primary">
+          💾 Зберегти рахунок
+        </button>
+        <a href="/invoices" class="btn btn-ghost">Скасувати</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script>
+// ── утиліти дат ─────────────────────────────────────────────
+function parseDate(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!m) return null;
+  const d = new Date(+m[3], +m[2] - 1, +m[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+function formatDate(d) {
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = d.getFullYear();
+  return `${dd}.${mm}.${yy}`;
+}
+function fmtMoney(n) {
+  // Ukrainian format: 1 234 567,89
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
+}
+
+// count_months — точна репліка Python-функції з utils.py
+function countMonths(from, to) {
+  let years  = to.getFullYear()  - from.getFullYear();
+  let months = to.getMonth()     - from.getMonth();
+  let days   = to.getDate()      - from.getDate();
+  let total  = years * 12 + months;
+  if (days > 0) total += 1;       // округлення вгору як в Python
+  return Math.max(total, 1);
+}
+
+// ── Дані поточного договору ──────────────────────────────────
+let _ctype    = '';   // 'access' | 'hourly'
+let _currency = 'UAH';
+let _tariff   = 0;
+let _users    = 1;
+let _hourrate = 0;
+
+function onContractChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) {
+    _ctype = '';
+    document.getElementById('access-fields').style.display = 'none';
+    document.getElementById('hourly-fields').style.display = 'none';
+    document.getElementById('calc-block').style.display = 'none';
+    return;
+  }
+
+  const typeRaw = (opt.dataset.type || '').toLowerCase();
+  const isHourly = typeRaw.includes('погодинний') || typeRaw.includes('hourly');
+
+  _ctype    = isHourly ? 'hourly' : 'access';
+  _currency = opt.dataset.currency || 'UAH';
+  _tariff   = parseFloat(opt.dataset.tariff)   || 0;
+  _users    = parseInt(opt.dataset.users)       || 1;
+  _hourrate = parseFloat(opt.dataset.hourrate)  || 0;
+
+  document.getElementById('access-fields').style.display = isHourly ? 'none' : 'flex';
+  document.getElementById('hourly-fields').style.display = isHourly ? 'flex' : 'none';
+
+  // Показати/приховати поле курсу
+  const rateWrap = document.getElementById('rate-wrap');
+  if (!isHourly && _currency !== 'UAH') {
+    document.getElementById('rate-label').textContent = `Курс НБУ (${_currency})`;
+    rateWrap.style.display = 'block';
+  } else {
+    rateWrap.style.display = 'none';
+  }
+
+  calcPreview();
+}
+
+// ── Швидкий вибір періоду ────────────────────────────────────
+function setPeriod(months) {
+  const fromStr = document.getElementById('period_from').value
+                || document.getElementById('invoice_date').value;
+  const from = parseDate(fromStr);
+  if (!from) {
+    alert('Спочатку вкажіть дату початку (Період з) або дату рахунку');
+    return;
+  }
+  // Додаємо місяці, потім –1 день
+  const to = new Date(from.getFullYear(), from.getMonth() + months, from.getDate() - 1);
+  document.getElementById('period_to').value = formatDate(to);
+  if (!document.getElementById('period_from').value)
+    document.getElementById('period_from').value = formatDate(from);
+  calcPreview();
+}
+
+// ── Попередній розрахунок ────────────────────────────────────
+function calcPreview() {
+  const block = document.getElementById('calc-block');
+  const lines = document.getElementById('calc-lines');
+  const hint  = document.getElementById('calc-hint');
+
+  if (!_ctype) { block.style.display = 'none'; return; }
+
+  if (_ctype === 'hourly') {
+    const hours = parseFloat(document.getElementById('hours').value) || 0;
+    if (hours <= 0) { block.style.display = 'none'; return; }
+    const total = hours * _hourrate;
+    lines.innerHTML =
+      `${hours} год &times; <strong>${fmtMoney(_hourrate)} грн/год</strong>`+
+      ` = <strong style="color:#16a34a">${fmtMoney(total)} грн</strong>`;
+    hint.textContent = '';
+    block.style.display = 'block';
+    return;
+  }
+
+  // ACCESS
+  const from = parseDate(document.getElementById('period_from').value);
+  const to   = parseDate(document.getElementById('period_to').value);
+  if (!from || !to || to <= from) { block.style.display = 'none'; return; }
+
+  const fxRate   = parseFloat(document.getElementById('fx_rate')?.value) || 1;
+  const discPct  = parseFloat(document.getElementById('discount_pct').value) || 0;
+
+  const tariffUah = (_currency === 'UAH') ? _tariff : _tariff * fxRate;
+  const months    = countMonths(from, to);
+  const gross     = _users * months * tariffUah;
+  const discAmt   = gross * discPct / 100;
+  const total     = gross - discAmt;
+
+  let html = `${_users} корист. &times; ${months} міс. &times; `+
+             `<strong>${fmtMoney(tariffUah)} грн</strong> = `+
+             `<strong>${fmtMoney(gross)} грн</strong>`;
+
+  if (discPct > 0) {
+    html += `<br>Знижка ${discPct.toFixed(0)}%: &minus;${fmtMoney(discAmt)} грн`+
+            `<br><strong style="color:#16a34a">До сплати: ${fmtMoney(total)} грн</strong>`;
+  } else {
+    html = html.replace('</strong>', `</strong><br><strong style="color:#16a34a">До сплати: ${fmtMoney(total)} грн</strong>`);
+  }
+
+  lines.innerHTML = html;
+
+  // Підказка знижки при 6+ місяцях
+  if (months >= 6 && discPct === 0) {
+    hint.textContent = '⚡ Для 6+ місяців рекомендовано знижку 20% — введіть вручну';
+  } else {
+    hint.textContent = '';
+  }
+
+  block.style.display = 'block';
+}
+
+// ── Init ─────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('contract_sel');
+  if (sel.value) onContractChange(sel);
+});
+</script>
+{% endblock %}

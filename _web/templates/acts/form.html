@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+
+<div style="max-width:560px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+    <a href="/acts" style="color:#94a3b8;text-decoration:none;font-size:13px">← Акти</a>
+    <span style="color:#e2e8f0">/</span>
+    <h1 style="font-size:18px;font-weight:700;color:#0f172a;margin:0">{{ title }}</h1>
+  </div>
+
+  <div class="card">
+    <form method="post" style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="field">
+        <label>Рахунок *</label>
+        <select name="invoice_no" required>
+          <option value="">— оберіть рахунок —</option>
+          {% for inv in invoices %}
+          <option value="{{ inv.invoice_no }}"
+                  {% if selected and selected.invoice_no == inv.invoice_no %}selected{% endif %}>
+            {{ inv.invoice_no }} — {{ inv.client_name }}
+            ({{ inv.period_to or 'без дати' }}, ₴{{ inv.sum_uah }})
+          </option>
+          {% endfor %}
+        </select>
+        {% if not invoices %}
+        <span style="font-size:12px;color:#d97706;margin-top:4px">
+          ⚠️ Всі рахунки вже мають акти або немає рахунків.
+        </span>
+        {% endif %}
+      </div>
+
+      <div class="field" style="width:160px">
+        <label>Дата акту *</label>
+        <input type="text" name="act_date" value="{{ today_str }}" placeholder="дд.мм.рррр" required/>
+      </div>
+
+      <div class="field" style="width:200px">
+        <label>Статус</label>
+        <select name="status">
+          <option value="Чернетка">📝 Чернетка</option>
+          <option value="Направлений">⚠️ Направлений</option>
+          <option value="Підписано">✓ Підписано</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:10px;padding-top:4px">
+        <button type="submit" class="btn btn-primary" {% if not invoices %}disabled style="opacity:.5;cursor:not-allowed"{% endif %}>
+          💾 Створити акт
+        </button>
+        <a href="/acts" class="btn btn-ghost">Скасувати</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

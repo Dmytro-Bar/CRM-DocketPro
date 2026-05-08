@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_sub %}{% if contract %}{{ contract.contract_no }}{% else %}Новий договір{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/contracts" class="btn btn-ghost">← Договори</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:720px">
+  <div class="card">
+    <form method="post" id="contract-form">
+
+      <div class="card-head">
+        <h3>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--accent)">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>
+          </svg>
+          Основні дані
+        </h3>
+      </div>
+
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+        {# Contract number — only on create #}
+        {% if not contract %}
+        <div class="field" style="grid-column:1/-1">
+          <label>№ договору <span style="color:var(--danger)">*</span></label>
+          <input type="text" name="contract_no" required placeholder="DOG-DDMMYYYY-001"/>
+        </div>
+        {% endif %}
+
+        {# Client — always #}
+        <div class="field" style="grid-column:1/-1">
+          <label>Клієнт <span style="color:var(--danger)">*</span></label>
+          <select name="edrpou" required>
+            {% for cl in clients %}
+            <option value="{{ cl.edrpou }}"
+              {% if contract and contract.edrpou == cl.edrpou %}selected{% endif %}>
+              {{ cl.name }}{% if cl.edrpou %} ({{ cl.edrpou }}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:3px">Назва у документах береться автоматично з картки клієнта</div>
+        </div>
+
+        {# Contract type — controls conditional fields #}
+        <div class="field">
+          <label>Тип договору</label>
+          <select name="contract_type" id="ct-select" onchange="onContractTypeChange(this.value)">
+            {% set ct = norm(contract.contract_type) if contract else '' %}
+            <option value="Доступ"     {% if not contract or ct in ('Доступ','Access','') %}selected{% endif %}>Доступ</option>
+            <option value="Погодинний" {% if ct in ('Погодинний','Hourly') %}selected{% endif %}>Погодинний</option>
+          </select>
+        </div>
+
+        {# Status #}
+        <div class="field">
+          <label>Статус</label>
+          <select name="status">
+            <option value="Активний"   {% if not contract or norm(contract.status) == 'Активний' %}selected{% endif %}>Активний</option>
+            <option value="Неактивний" {% if contract and norm(contract.status) == 'Неактивний' %}selected{% endif %}>Неактивний</option>
+          </select>
+        </div>
+
+        {# Dates #}
+        <div class="field">
+          <label>Дата договору</label>
+          <input type="text" name="contract_date"
+                 value="{{ contract.contract_date if contract else '' }}"
+                 placeholder="дд.мм.рррр"/>
+        </div>
+        <div class="field">
+          <label>Дата закінчення</label>
+          <input type="text" name="contract_end"
+                 value="{{ contract.contract_end if contract else '' }}"
+                 placeholder="дд.мм.рррр"/>
+        </div>
+
+      </div>{# /card-body #}
+
+      {# ── Доступ fields ─────────────────────────────────────── #}
+      <div class="card-head" id="section-access" style="border-top:1px solid var(--border)">
+        <h3 style="color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Параметри Доступ</h3>
+      </div>
+      <div class="card-body" id="fields-access" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <div class="field">
+          <label>Валюта</label>
+          <select name="currency">
+            {% for cur in ['UAH','USD','EUR'] %}
+            <option value="{{ cur }}" {% if contract and contract.currency == cur %}selected{% endif %}>{{ cur }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Тариф (за 1 корист./міс.)</label>
+          <input type="number" step="0.01" name="tariff_fx"
+                 value="{{ contract.tariff_fx if contract else 0 }}"/>
+        </div>
+        <div class="field">
+          <label>Кількість користувачів</label>
+          <input type="number" name="users"
+                 value="{{ contract.users if contract else 1 }}" min="1"/>
+        </div>
+        <div class="field">
+          <label>Курс НБУ на дату договору</label>
+          <input type="number" step="0.01" name="nbu_rate"
+                 value="{{ contract.nbu_rate if contract else 0 }}"/>
+        </div>
+        <div class="field">
+          <label>Тип ставки</label>
+          <input type="text" name="type_rate"
+                 value="{{ contract.type_rate if contract else '' }}"/>
+        </div>
+      </div>
+
+      {# ── Погодинний fields ──────────────────────────────────── #}
+      <div class="card-head" id="section-hourly" style="border-top:1px solid var(--border)">
+        <h3 style="color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Параметри Погодинний</h3>
+      </div>
+      <div class="card-body" id="fields-hourly" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="field">
+          <label>Погодинна ставка (грн)</label>
+          <input type="number" step="0.01" name="hour_rate"
+                 value="{{ contract.hour_rate if contract else 0 }}"/>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Предмет договору</label>
+          <input type="text" name="subject"
+                 value="{{ contract.subject if contract else '' }}"
+                 placeholder="Розробка програмного забезпечення"/>
+        </div>
+      </div>
+
+      {# ── Act template ──────────────────────────────────────── #}
+      <div class="card-head" style="border-top:1px solid var(--border)">
+        <h3 style="color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Шаблони</h3>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr;gap:14px">
+        <div class="field">
+          <label>Шаблон акту</label>
+          {% if act_templates %}
+          <select name="act_template" id="act-tpl-select">
+            <option value="">— стандартний за типом договору —</option>
+            {% for fn in act_templates %}
+            <option value="{{ fn }}"
+                    data-for="{{ 'access' if 'Доступ' in fn and 'Погодинно' not in fn else ('hourly' if 'Погодинно' in fn else 'all') }}"
+                    {% if contract and contract.act_template == fn %}selected{% endif %}>
+              {{ fn | replace('.docx','') | replace('Шаблон_Акт_','') | replace('_',' ') }}
+            </option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input type="text" name="act_template"
+                 value="{{ contract.act_template if contract else '' }}"
+                 placeholder="Шаблон_Акт_Доступ_НАЗВА_КЛІЄНТА"/>
+          {% endif %}
+          <div style="font-size:11px;color:var(--text-mute);margin-top:3px">
+            Кастомні шаблони завантажуються у розділі
+            <a href="/templates" style="color:var(--accent-fg)">Шаблони</a>
+          </div>
+        </div>
+      </div>
+
+      {# ── Actions ───────────────────────────────────────────── #}
+      <div class="card-body" style="display:flex;gap:10px;padding-top:4px;border-top:1px solid var(--border)">
+        <button type="submit" class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+          Зберегти
+        </button>
+        {% if contract %}
+        <form method="post" action="/contracts/{{ contract.contract_no }}/delete" style="margin:0"
+              onsubmit="return confirm('Видалити договір {{ contract.contract_no }}? Це також видалить всі пов'язані рахунки та акти.')">
+          <button type="submit" class="btn btn-ghost" style="color:var(--danger)">Видалити</button>
+        </form>
+        {% endif %}
+        <a href="/contracts" class="btn btn-ghost">Скасувати</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function onContractTypeChange(v) {
+  const isH = (v === 'Погодинний');
+
+  // Section headers + field groups
+  const secAccess  = document.getElementById('section-access');
+  const fldAccess  = document.getElementById('fields-access');
+  const secHourly  = document.getElementById('section-hourly');
+  const fldHourly  = document.getElementById('fields-hourly');
+
+  if (secAccess)  secAccess.style.display  = isH ? 'none' : '';
+  if (fldAccess)  fldAccess.style.display  = isH ? 'none' : '';
+  if (secHourly)  secHourly.style.display  = isH ? '' : 'none';
+  if (fldHourly)  fldHourly.style.display  = isH ? '' : 'none';
+
+  // Filter act template options
+  const sel = document.getElementById('act-tpl-select');
+  if (!sel) return;
+  sel.querySelectorAll('option').forEach(o => {
+    const f = o.dataset.for || 'all';
+    o.hidden = (f !== 'all' && ((isH && f === 'access') || (!isH && f === 'hourly')));
+  });
+  // Reset if currently selected option is now hidden
+  const cur = sel.querySelector('option:checked');
+  if (cur && cur.hidden) sel.value = '';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const ct = document.getElementById('ct-select');
+  if (ct) onContractTypeChange(ct.value);
+});
+</script>
+{% endblock %}

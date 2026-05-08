@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="uk" data-theme="light" data-accent="indigo" data-density="default" data-layout="command">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}DocketPro CRM{% endblock %}</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+  <!-- Design system -->
+  <link rel="stylesheet" href="/static/styles.css"/>
+  <link rel="stylesheet" href="/static/app.css"/>
+
+  <!-- JS libs -->
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" defer></script>
+
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ══════════════════════════════════════════════════════════
+       SIDEBAR
+  ══════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+
+    <!-- Brand -->
+    <div class="brand">
+      <div class="brand-mark">D</div>
+      <div>
+        <div class="brand-text">DocketPro</div>
+        <div class="brand-sub">CRM</div>
+      </div>
+    </div>
+
+    <!-- Nav: Робота -->
+    <div class="nav-section">Робота</div>
+
+    {% set current = request.url.path %}
+
+    <a href="/" class="nav-item {% if current == '/' %}active{% endif %}">
+      <!-- IconDashboard -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/>
+        <rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
+      </svg>
+      <span>Дашборд</span>
+    </a>
+
+    <a href="/clients" class="nav-item {% if current.startswith('/clients') %}active{% endif %}">
+      <!-- IconClients -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.5-5 6.5-5s5.7 1.8 6.5 5"/>
+        <circle cx="17" cy="6" r="2.5"/><path d="M21.5 16c-.4-2-1.9-3.4-4-3.7"/>
+      </svg>
+      <span>Клієнти</span>
+    </a>
+
+    <a href="/contracts" class="nav-item {% if current.startswith('/contracts') %}active{% endif %}">
+      <!-- IconContract -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>
+      </svg>
+      <span>Договори</span>
+    </a>
+
+    <a href="/invoices" class="nav-item {% if current.startswith('/invoices') %}active{% endif %}">
+      <!-- IconInvoice -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z"/>
+        <path d="M9 8h6M9 12h6M9 16h3"/>
+      </svg>
+      <span>Рахунки</span>
+      {%- if sidebar_badge_invoices is defined and sidebar_badge_invoices %}
+      <span class="badge-count">{{ sidebar_badge_invoices }}</span>
+      {%- endif %}
+    </a>
+
+    <a href="/acts" class="nav-item {% if current.startswith('/acts') %}active{% endif %}">
+      <!-- IconAct -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 19V5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/>
+        <path d="M9 14l2 2 4-4"/>
+      </svg>
+      <span>Акти</span>
+    </a>
+
+    <!-- Nav: Фінанси -->
+    <div class="nav-section" style="margin-top:8px;">Фінанси</div>
+
+    <a href="/payments" class="nav-item {% if current.startswith('/payments') %}active{% endif %}">
+      <!-- IconBank -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 10l9-6 9 6"/>
+        <path d="M5 10v8M9 10v8M15 10v8M19 10v8"/>
+        <path d="M3 21h18"/>
+      </svg>
+      <span>Банк</span>
+    </a>
+
+    <a href="/app-payments" class="nav-item {% if current.startswith('/app-payments') %}active{% endif %}">
+      <!-- IconExpenses (repurposed for LiqPay) -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <path d="M2 10h20"/>
+      </svg>
+      <span>LiqPay</span>
+    </a>
+
+    <a href="/expenses" class="nav-item {% if current.startswith('/expenses') %}active{% endif %}">
+      <!-- IconExpenses -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 7v10M9 9.5C9 8 10.5 7 12 7s3 .8 3 2.2c0 2.6-6 1.4-6 4 0 1.4 1.5 2.3 3 2.3s3-.8 3-2.2"/>
+      </svg>
+      <span>Витрати</span>
+    </a>
+
+    <a href="/templates" class="nav-item {% if current.startswith('/templates') %}active{% endif %}">
+      <!-- IconTemplate -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M3 9h18M9 21V9"/>
+      </svg>
+      <span>Шаблони</span>
+    </a>
+
+    <!-- User card -->
+    <div class="user-card">
+      <div class="avatar">ДБ</div>
+      <div style="min-width:0; flex:1;">
+        <div style="font-size:12.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Дмитро Барабин</div>
+        <div style="font-size:11px; color:var(--text-mute);">Адміністратор</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════
+       MAIN
+  ══════════════════════════════════════════════════════════ -->
+  <main class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div>
+        <h1>{% block page_title %}DocketPro{% endblock %}</h1>
+        <div class="sub">{% block page_sub %}{% endblock %}</div>
+      </div>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+      </div>
+    </div>
+
+    <!-- Flash messages (passed as template context: flash_msg, flash_type) -->
+    {% if flash_msg is defined and flash_msg %}
+    <div class="toast-wrap" id="flash-toasts">
+      <div class="toast {{ flash_type|default('info') }}" role="alert">
+        {% if flash_type == 'success' %}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success);flex-shrink:0"><path d="M4 12l5 5L20 6"/></svg>
+        {% elif flash_type == 'danger' %}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger);flex-shrink:0"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        {% endif %}
+        <span>{{ flash_msg }}</span>
+        <button onclick="this.parentElement.remove()" style="margin-left:auto;border:0;background:transparent;cursor:pointer;color:var(--text-mute);padding:2px;">✕</button>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Page content -->
+    {% block content %}{% endblock %}
+
+  </main>
+
+</div>
+
+<!-- Toast container for JS-triggered toasts -->
+<div class="toast-wrap" id="toast-container"></div>
+
+<!-- Drawer backdrop -->
+<div class="drawer-backdrop" id="drawer-backdrop" onclick="closeDrawer()"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     Global JS
+══════════════════════════════════════════════════════════ -->
+<script>
+// ── Drawer ──────────────────────────────────────────────────
+function openDrawer(id) {
+  document.querySelectorAll('.drawer').forEach(d => d.classList.remove('open'));
+  const el = document.getElementById(id || 'drawer');
+  if (el) el.classList.add('open');
+  document.getElementById('drawer-backdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer() {
+  document.querySelectorAll('.drawer').forEach(d => d.classList.remove('open'));
+  document.getElementById('drawer-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// ── Toast ────────────────────────────────────────────────────
+function showToast(msg, type = 'info', duration = 4000) {
+  const wrap = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span style="flex:1">${msg}</span><button onclick="this.parentElement.remove()" style="border:0;background:transparent;cursor:pointer;color:var(--text-mute);padding:2px;">✕</button>`;
+  wrap.appendChild(t);
+  setTimeout(() => t.remove(), duration);
+}
+
+// ── Auto-hide flash toasts ───────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#flash-toasts .toast').forEach(t => {
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 4000);
+  });
+});
+
+// ── Confirm form submit ──────────────────────────────────────
+function confirmAction(form, msg) {
+  if (confirm(msg)) form.submit();
+  return false;
+}
+
+// ── Row filter (client-side tab filtering) ───────────────────
+function filterRows(attr, value, tabEl) {
+  // Deactivate all tabs in same group
+  tabEl.closest('.status-tabs').querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+
+  const tbody = document.querySelector('[data-filterable]');
+  if (!tbody) return;
+  tbody.querySelectorAll('tr[data-' + attr + ']').forEach(tr => {
+    if (value === 'all' || tr.dataset[attr] === value || tr.dataset[attr]?.includes(value)) {
+      tr.style.display = '';
+    } else {
+      tr.style.display = 'none';
+    }
+  });
+  updateSummary();
+}
+
+// ── Summary bar recalc ───────────────────────────────────────
+function updateSummary() {
+  const el = document.getElementById('summary-total');
+  if (!el) return;
+  let total = 0;
+  document.querySelectorAll('tr[data-sum]:not([style*="display: none"])').forEach(tr => {
+    total += parseFloat(tr.dataset.sum || 0);
+  });
+  el.textContent = fmtMoney(total);
+}
+
+// ── Client-side search filter ────────────────────────────────
+function tableSearch(input, selector) {
+  const q = input.value.toLowerCase();
+  document.querySelectorAll(selector).forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── Money formatter (UAH) ────────────────────────────────────
+function fmtMoney(n) {
+  return '₴ ' + Math.round(n).toLocaleString('uk-UA');
+}
+
+// ── Bulk select ──────────────────────────────────────────────
+function initBulkSelect(tableId) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl) return;
+  const headerCb = tbl.querySelector('thead input[type=checkbox]');
+  const bulkBar = document.getElementById('bulk-bar');
+
+  function refreshBulk() {
+    const checked = tbl.querySelectorAll('tbody input[type=checkbox]:checked');
+    if (bulkBar) {
+      bulkBar.classList.toggle('visible', checked.length > 0);
+      const cnt = bulkBar.querySelector('.bulk-count');
+      if (cnt) cnt.textContent = `Вибрано: ${checked.length}`;
+    }
+  }
+
+  if (headerCb) {
+    headerCb.addEventListener('change', () => {
+      tbl.querySelectorAll('tbody input[type=checkbox]').forEach(cb => cb.checked = headerCb.checked);
+      refreshBulk();
+    });
+  }
+  tbl.querySelectorAll('tbody input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', refreshBulk);
+  });
+}
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
