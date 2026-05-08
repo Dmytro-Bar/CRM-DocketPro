@@ -314,32 +314,46 @@
         Відкрити PDF рахунку
       </a>
     </div>
-    {# ── Підписана версія ── #}
-    <div id="drw-signed-block" style="margin-top:8px;display:none">
-      <a id="drw-signed-link" href="#" target="_blank" class="btn btn-secondary"
-         style="width:100%;justify-content:center;background:color-mix(in oklch,var(--success) 12%,transparent);color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-          <path d="M8 12l3 3 5-5"/>
-        </svg>
-        Підписаний PDF
-      </a>
-    </div>
-    {# ── Завантажити підписаний PDF ── #}
-    <div id="drw-upload-signed-block" style="margin-top:8px;display:none">
+    {# ── Блок підпису — завжди видимий ── #}
+    <div id="drw-sign-section" style="margin-top:14px;padding:12px 14px;
+         border:1px solid var(--border);border-radius:var(--radius);
+         background:var(--surface-2)">
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.06em;color:var(--text-mute);margin-bottom:10px">
+        Підписаний документ
+      </div>
+
+      {# Якщо вже є підписана версія #}
+      <div id="drw-signed-block" style="display:none;margin-bottom:8px">
+        <a id="drw-signed-link" href="#" target="_blank" class="btn btn-sm btn-secondary"
+           style="width:100%;justify-content:center;
+                  background:color-mix(in oklch,var(--success) 12%,transparent);
+                  color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+            <path d="M8 12l3 3 5-5"/>
+          </svg>
+          Відкрити підписаний PDF
+        </a>
+      </div>
+
+      {# Форма завантаження — завжди #}
       <form method="post" id="drw-upload-form" enctype="multipart/form-data">
         <div style="display:flex;align-items:center;gap:8px">
-          <label style="font-size:12px;color:var(--text-mute);white-space:nowrap">Підписаний PDF:</label>
           <input type="file" name="signed_file" accept=".pdf,.jpg,.jpeg,.png"
                  style="font-size:12px;flex:1;min-width:0"
                  onchange="this.nextElementSibling.disabled = !this.value"/>
-          <button type="submit" class="btn btn-sm btn-ghost" disabled
-                  title="Завантажити підписану версію (після підпису в Preview)">
+          <button type="submit" class="btn btn-sm btn-secondary" disabled
+                  title="Завантажити підписану версію">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>
+            Завантажити
           </button>
         </div>
-        <div style="font-size:10.5px;color:var(--text-mute);margin-top:4px">
-          Підпишіть PDF у Preview → завантажте тут. При відправці email буде підписана версія.
+        <div id="drw-sign-hint" style="font-size:10.5px;color:var(--text-mute);margin-top:5px">
+          Відкрийте PDF → підпишіть у Preview → завантажте тут. Email відправить підписану версію.
+        </div>
+        <div id="drw-sign-nopdf" style="font-size:10.5px;color:var(--text-mute);margin-top:5px;display:none">
+          ⚠ Спочатку згенеруйте PDF рахунку (кнопка "Переглянути документ").
         </div>
       </form>
     </div>
@@ -407,7 +421,7 @@ function openInvDrawer(row) {
   if (d.pdf) { document.getElementById('drw-pdf-link').href = d.pdf; pdfBlock.style.display = ''; }
   else { pdfBlock.style.display = 'none'; }
 
-  // Signed PDF
+  // Signed PDF link (show if exists)
   const signedBlock = document.getElementById('drw-signed-block');
   if (d.signed_pdf) {
     document.getElementById('drw-signed-link').href = d.signed_pdf;
@@ -416,14 +430,24 @@ function openInvDrawer(row) {
     signedBlock.style.display = 'none';
   }
 
-  // Upload signed block (only when invoice has a PDF generated)
-  const uploadSignedBlock = document.getElementById('drw-upload-signed-block');
-  const uploadForm = document.getElementById('drw-upload-form');
+  // Upload form — always visible, but adapt hint based on whether PDF exists
+  const uploadForm   = document.getElementById('drw-upload-form');
+  const signHint     = document.getElementById('drw-sign-hint');
+  const signNoPdf    = document.getElementById('drw-sign-nopdf');
+  const fileInput    = uploadForm ? uploadForm.querySelector('input[type=file]') : null;
+  const uploadBtn    = uploadForm ? uploadForm.querySelector('button[type=submit]') : null;
+
   if (d.pdf) {
-    uploadSignedBlock.style.display = '';
     uploadForm.action = '/invoices/' + d.no + '/upload-signed';
+    if (fileInput)  fileInput.disabled  = false;
+    if (signHint)   signHint.style.display  = '';
+    if (signNoPdf)  signNoPdf.style.display = 'none';
   } else {
-    uploadSignedBlock.style.display = 'none';
+    uploadForm.action = '#';
+    if (fileInput)  fileInput.disabled  = true;
+    if (uploadBtn)  uploadBtn.disabled  = true;
+    if (signHint)   signHint.style.display  = 'none';
+    if (signNoPdf)  signNoPdf.style.display = '';
   }
 
   // Actions

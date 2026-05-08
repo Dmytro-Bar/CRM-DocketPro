@@ -388,26 +388,42 @@
       <div class="info-row" id="ct-drw-subject-row" style="display:none"><span class="key">Предмет</span><span class="val" id="ct-drw-subject" style="font-size:12px;color:var(--text-soft)"></span></div>
     </div>
 
-    {# Notes #}
-    <div id="ct-drw-notes-row" style="display:none;margin-top:12px;padding:10px 12px;
-         background:color-mix(in oklch,var(--accent) 6%,transparent);
-         border-radius:var(--radius);border:1px solid var(--border)">
-      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:5px">Нотатки</div>
-      <div id="ct-drw-notes" style="font-size:12.5px;color:var(--text);white-space:pre-wrap;line-height:1.5"></div>
-    </div>
+    {# Notes + Scan — always visible block #}
+    <div style="margin-top:14px;padding:12px 14px;
+         border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2)">
 
-    {# Signed scan link #}
-    <div id="ct-drw-scan-row" style="display:none;margin-top:10px">
-      <a id="ct-drw-scan-link" href="#" target="_blank" class="btn btn-secondary btn-sm"
-         style="width:100%;justify-content:center;
-                background:color-mix(in oklch,var(--success) 12%,transparent);
-                color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-          <path d="M8 12l3 3 5-5"/>
-        </svg>
-        Підписаний скан договору
-      </a>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;
+                    letter-spacing:.06em;color:var(--text-mute)">Нотатки</div>
+        <a id="ct-drw-edit-notes" href="#" style="font-size:11px;color:var(--accent-fg)">✏ редагувати</a>
+      </div>
+
+      {# Notes content #}
+      <div id="ct-drw-notes-row">
+        <div id="ct-drw-notes-text"
+             style="font-size:12.5px;color:var(--text);white-space:pre-wrap;line-height:1.5"></div>
+        <div id="ct-drw-notes-empty"
+             style="font-size:12px;color:var(--text-mute);font-style:italic">
+          Нотаток немає — натисніть "редагувати" щоб додати
+        </div>
+      </div>
+
+      {# Signed scan #}
+      <div id="ct-drw-scan-row" style="margin-top:10px;display:none">
+        <a id="ct-drw-scan-link" href="#" target="_blank" class="btn btn-sm btn-secondary"
+           style="width:100%;justify-content:center;
+                  background:color-mix(in oklch,var(--success) 12%,transparent);
+                  color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+            <path d="M8 12l3 3 5-5"/>
+          </svg>
+          Підписаний скан договору
+        </a>
+      </div>
+      <div id="ct-drw-scan-empty" style="margin-top:8px;font-size:11px;color:var(--text-mute);font-style:italic">
+        Скан договору не завантажено — додати можна у формі редагування
+      </div>
     </div>
 
     {# Invoice / Act stats #}
@@ -719,21 +735,28 @@ function openContractDrawer(el) {
   }
 
   // Notes
-  const notesRow = document.getElementById('ct-drw-notes-row');
+  const notesText  = document.getElementById('ct-drw-notes-text');
+  const notesEmpty = document.getElementById('ct-drw-notes-empty');
+  const editNotes  = document.getElementById('ct-drw-edit-notes');
+  if (editNotes) editNotes.href = '/contracts/' + d.no + '/edit';
   if (d.notes && d.notes.trim()) {
-    document.getElementById('ct-drw-notes').textContent = d.notes.trim();
-    notesRow.style.display = '';
+    if (notesText)  { notesText.textContent = d.notes.trim(); notesText.style.display = ''; }
+    if (notesEmpty) notesEmpty.style.display = 'none';
   } else {
-    notesRow.style.display = 'none';
+    if (notesText)  notesText.style.display = 'none';
+    if (notesEmpty) notesEmpty.style.display = '';
   }
 
   // Signed scan
-  const scanRow = document.getElementById('ct-drw-scan-row');
+  const scanRow   = document.getElementById('ct-drw-scan-row');
+  const scanEmpty = document.getElementById('ct-drw-scan-empty');
   if (d.scan_pdf) {
     document.getElementById('ct-drw-scan-link').href = d.scan_pdf;
-    scanRow.style.display = '';
+    if (scanRow)   scanRow.style.display = '';
+    if (scanEmpty) scanEmpty.style.display = 'none';
   } else {
-    scanRow.style.display = 'none';
+    if (scanRow)   scanRow.style.display = 'none';
+    if (scanEmpty) scanEmpty.style.display = '';
   }
 
   // Invoice / act stats
