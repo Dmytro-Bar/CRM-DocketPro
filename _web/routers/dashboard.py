@@ -93,7 +93,8 @@ def compute_kpi(date_from: date, date_to: date,
         debt_real               = 0.0
         debt_pending            = 0.0
         access_revenue_all_time = 0.0
-        last_period_to          = {}
+        # Track last invoice period per contract: {cno: {"from": date, "to": date}}
+        last_inv_period         = {}
         all_invoices            = []
         paid_invoices           = []
 
@@ -103,6 +104,7 @@ def compute_kpi(date_from: date, date_to: date,
             inv_no   = r["invoice_no"]  or ""
             inv_date = parse_date(r["invoice_date"])
             sum_uah  = float(r["sum_uah"] or 0)
+            pfrom    = parse_date(r["period_from"])
             pto      = parse_date(r["period_to"])
             due      = parse_date(r["due_date"])
             status   = norm(r["pay_status"])
@@ -121,8 +123,9 @@ def compute_kpi(date_from: date, date_to: date,
                 continue
 
             if pto and cno:
-                if cno not in last_period_to or pto > last_period_to[cno]:
-                    last_period_to[cno] = pto
+                existing = last_inv_period.get(cno)
+                if not existing or pto > existing["to"]:
+                    last_inv_period[cno] = {"from": pfrom, "to": pto}
 
             # A) Invoiced in period
             if inv_date and date_from <= inv_date <= date_to:
@@ -219,10 +222,16 @@ def compute_kpi(date_from: date, date_to: date,
         sent_unsigned_acts.sort(key=lambda x: x["overdue_days"], reverse=True)
 
         # ── Next invoices (Access contracts) ──────────────────
-        def next_month_first(d: date) -> date:
-            if d.month == 12:
-                return date(d.year + 1, 1, 1)
-            return date(d.year, d.month + 1, 1)
+        # Returns the last day of the month that is (months-1) months after start.
+        # Example: start=2026-07-01, months=3 → September = end of Q3 → 2026-09-30
+        def _add_months_end(start: date, months: int) -> date:
+            total = start.year * 12 + (start.month - 1) + (months - 1)
+            y, m = divmod(total, 12)
+            m += 1
+            last = calendar.monthrange(y, m)[1]
+            return date(y, m, last)
+
+        DAYS_BEFORE = 5  # issue invoice N days before next period starts
 
         next_invoices = []
         for c in contracts_list:
@@ -230,24 +239,56 @@ def compute_kpi(date_from: date, date_to: date,
                 continue
             if c["ctype"] != "Доступ":
                 continue
-            pto = last_period_to.get(c["no"])
-            if pto:
-                nd = next_month_first(pto)
-                ld = calendar.monthrange(nd.year, nd.month)[1]
-                next_invoices.append({
-                    "contract":  c["no"],
-                    "client":    c["client"],
-                    "next_date": nd,
-                    "next_end":  date(nd.year, nd.month, ld),
-                    "days_left": (nd - today).days,
-                    "tariff":    f"{c['tariff']} {c['curr']}",
-                })
+
+            info = last_inv_period.get(c["no"])
+            if not info:
+                continue
+
+            pfrom = info["from"]
+            pto   = info["to"]
+
+            # Next period starts the day after last period ends
+            next_start = pto + timedelta(days=1)
+
+            # Infer period length in months from the last invoice
+            if pfrom:
+                months_count = (
+                    (pto.year * 12 + pto.month) - (pfrom.year * 12 + pfrom.month) + 1
+                )
+                months_count = max(1, months_count)
+            else:
+                months_count = 3  # default: quarterly
+
+            # Suggested next period end (same duration)
+            next_end = _add_months_end(next_start, months_count)
+
+            # Deadline to issue = DAYS_BEFORE days before next period starts
+            issue_by  = next_start - timedelta(days=DAYS_BEFORE)
+            days_left = (issue_by - today).days
+
+            # Period label for display
+            period_label = (
+                f"{next_start.strftime('%d.%m')} – {next_end.strftime('%d.%m.%Y')}"
+            )
+
+            next_invoices.append({
+                "contract":     c["no"],
+                "client":       c["client"],
+                "next_start":   next_start,
+                "next_end":     next_end,
+                "issue_by":     issue_by,
+                "period_label": period_label,
+                "months_count": months_count,
+                "days_left":    days_left,
+                "tariff":       f"{c['tariff']} {c['curr']}",
+            })
+
         next_invoices.sort(key=lambda x: x["days_left"])
         for ni in next_invoices:
             dl = ni["days_left"]
             ni["urgency"] = ("overdue" if dl < 0 else
                              "urgent"  if dl <= 3 else
-                             "soon"    if dl <= 10 else "ok")
+                             "soon"    if dl <= 14 else "ok")
 
         # ── Invoices without acts ─────────────────────────────
         seen_inv_acts = set()

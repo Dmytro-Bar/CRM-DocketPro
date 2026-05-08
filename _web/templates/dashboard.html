@@ -166,21 +166,34 @@
     <div class="card-body flush">
       <table class="tbl">
         <thead><tr>
-          <th style="width:24%">Договір</th>
+          <th style="width:22%">Договір</th>
           <th>Клієнт</th>
-          <th style="width:115px">До кінця місяця</th>
-          <th class="num" style="width:110px">Тариф</th>
-          <th style="text-align:center;width:150px">Виставити</th>
+          <th style="width:165px">Наступний період</th>
+          <th class="num" style="width:100px">Тариф</th>
+          <th style="width:115px">Виставити до</th>
+          <th style="text-align:center;width:130px">Статус</th>
         </tr></thead>
         <tbody>
         {% for ni in next_invoices %}
         <tr {% if ni.urgency=='overdue' %}style="background:color-mix(in oklch,var(--danger-soft) 30%,transparent)"
             {% elif ni.urgency=='urgent' %}style="background:color-mix(in oklch,var(--danger-soft) 15%,transparent)"
-            {% elif ni.urgency=='soon' %}style="background:color-mix(in oklch,var(--warning-soft) 20%,transparent)"{% endif %}>
-          <td class="mono" style="color:var(--accent-fg);font-size:11.5px">{{ ni.contract }}</td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px">{{ ni.client }}</td>
-          <td style="font-size:11.5px;color:var(--text-mute);white-space:nowrap">{{ fmt_date(ni.next_end) }}</td>
+            {% elif ni.urgency=='soon'   %}style="background:color-mix(in oklch,var(--warning-soft) 20%,transparent)"{% endif %}>
+          <td>
+            <a href="/invoices/new?contract_no={{ ni.contract | urlencode }}"
+               style="font-size:11.5px;color:var(--accent-fg);font-family:var(--font-mono);
+                      text-decoration:none;font-weight:600"
+               title="Виставити рахунок">{{ ni.contract }}</a>
+          </td>
+          <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px">{{ ni.client }}</td>
+          <td style="font-size:11.5px;color:var(--text-mute);white-space:nowrap">
+            {{ ni.period_label }}
+            <span style="font-size:10px;color:var(--text-mute);margin-left:3px">({{ ni.months_count }} міс.)</span>
+          </td>
           <td class="num" style="font-size:12px">{{ ni.tariff }}</td>
+          <td style="font-size:12px;font-weight:600;white-space:nowrap;
+              color:{% if ni.days_left < 0 %}var(--danger-fg){% elif ni.days_left <= 14 %}var(--warning-fg){% else %}var(--text){% endif %}">
+            {{ fmt_date(ni.issue_by) }}
+          </td>
           <td style="text-align:center">{{ upill(ni.urgency, ni.days_left) }}</td>
         </tr>
         {% endfor %}
