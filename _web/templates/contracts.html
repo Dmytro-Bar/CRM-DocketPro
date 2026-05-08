@@ -145,7 +145,9 @@
             "inv_total": item.inv_total,
             "inv_unpaid":item.inv_unpaid,
             "act_total": item.act_total,
-            "sum_month": item.sum_month
+            "sum_month": item.sum_month,
+            "notes":     c.notes or "",
+            "scan_pdf":  pdf_url(c.scan_path) if c.scan_path else ""
           } | tojson }}'>
         <td class="mono" style="font-size:12px">{{ c.contract_no }}</td>
         <td style="font-weight:500;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.client_name }}</td>
@@ -384,6 +386,28 @@
       <div class="info-row"><span class="key">Діє до</span><span id="ct-drw-end"></span></div>
       <div class="info-row" id="ct-drw-debt-row" style="display:none"><span class="key">Борг</span><span class="val" id="ct-drw-debt" style="font-family:var(--font-mono);font-weight:600;color:var(--danger-fg)"></span></div>
       <div class="info-row" id="ct-drw-subject-row" style="display:none"><span class="key">Предмет</span><span class="val" id="ct-drw-subject" style="font-size:12px;color:var(--text-soft)"></span></div>
+    </div>
+
+    {# Notes #}
+    <div id="ct-drw-notes-row" style="display:none;margin-top:12px;padding:10px 12px;
+         background:color-mix(in oklch,var(--accent) 6%,transparent);
+         border-radius:var(--radius);border:1px solid var(--border)">
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:5px">Нотатки</div>
+      <div id="ct-drw-notes" style="font-size:12.5px;color:var(--text);white-space:pre-wrap;line-height:1.5"></div>
+    </div>
+
+    {# Signed scan link #}
+    <div id="ct-drw-scan-row" style="display:none;margin-top:10px">
+      <a id="ct-drw-scan-link" href="#" target="_blank" class="btn btn-secondary btn-sm"
+         style="width:100%;justify-content:center;
+                background:color-mix(in oklch,var(--success) 12%,transparent);
+                color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+          <path d="M8 12l3 3 5-5"/>
+        </svg>
+        Підписаний скан договору
+      </a>
     </div>
 
     {# Invoice / Act stats #}
@@ -692,6 +716,24 @@ function openContractDrawer(el) {
     subRow.style.display = '';
   } else {
     subRow.style.display = 'none';
+  }
+
+  // Notes
+  const notesRow = document.getElementById('ct-drw-notes-row');
+  if (d.notes && d.notes.trim()) {
+    document.getElementById('ct-drw-notes').textContent = d.notes.trim();
+    notesRow.style.display = '';
+  } else {
+    notesRow.style.display = 'none';
+  }
+
+  // Signed scan
+  const scanRow = document.getElementById('ct-drw-scan-row');
+  if (d.scan_pdf) {
+    document.getElementById('ct-drw-scan-link').href = d.scan_pdf;
+    scanRow.style.display = '';
+  } else {
+    scanRow.style.display = 'none';
   }
 
   // Invoice / act stats

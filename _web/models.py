@@ -94,9 +94,10 @@ def is_overdue(pay_status: str, due_date_str: str) -> bool:
 # --- PDF URL helper ---
 
 def pdf_url(abs_path: str) -> str:
-    """Convert absolute pdf_path from DB to a /docs/... web URL."""
+    """Convert absolute pdf_path from DB to a /docs/... web URL (URL-encoded)."""
     if not abs_path:
         return ""
+    from urllib.parse import quote
     try:
         from config import CONTRACTS_DIR as _base
     except Exception:
@@ -106,7 +107,9 @@ def pdf_url(abs_path: str) -> str:
         base = _base.rstrip("/\\")
         if rel.startswith(base):
             rel = rel[len(base):].lstrip("/\\")
-    return "/docs/" + rel.replace("\\", "/")
+    rel = rel.replace("\\", "/")
+    # URL-encode path segments (keep "/" as separator)
+    return "/docs/" + quote(rel, safe="/")
 
 
 # --- Excel export helper ---

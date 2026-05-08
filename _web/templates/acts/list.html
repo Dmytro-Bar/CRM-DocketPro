@@ -114,6 +114,7 @@
           "invoice": r.invoice_no or "",
           "contract": r.contract_no or "",
           "pdf": pdf_url(r.pdf_path) if r.pdf_path else "",
+          "scan_pdf": item.scan_pdf,
           "days": item.days | default(0),
           "email_sent_date": item.email_sent_date,
           "client_email": item.client_email
@@ -213,8 +214,37 @@
     <div id="act-drw-pdf" style="margin-top:18px;display:none">
       <a id="act-drw-pdf-link" href="#" target="_blank" class="btn btn-secondary" style="width:100%;justify-content:center">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-        Відкрити PDF
+        Відкрити PDF акту
       </a>
+    </div>
+    {# ── Підписаний скан ── #}
+    <div id="act-drw-scan" style="margin-top:8px;display:none">
+      <a id="act-drw-scan-link" href="#" target="_blank" class="btn btn-secondary"
+         style="width:100%;justify-content:center;background:color-mix(in oklch,var(--success) 12%,transparent);color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+          <path d="M8 12l3 3 5-5"/>
+        </svg>
+        Підписаний скан акту
+      </a>
+    </div>
+    {# ── Завантажити скан ── #}
+    <div id="act-drw-upload" style="margin-top:8px">
+      <form method="post" id="act-upload-form" enctype="multipart/form-data">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:12px;color:var(--text-mute);white-space:nowrap">Підписаний скан:</label>
+          <input type="file" name="scan_file" accept=".pdf,.jpg,.jpeg,.png"
+                 style="font-size:12px;flex:1;min-width:0"
+                 onchange="this.nextElementSibling.disabled = !this.value"/>
+          <button type="submit" class="btn btn-sm btn-ghost" disabled
+                  title="Завантажити підписаний скан">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>
+          </button>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-mute);margin-top:4px">
+          PDF, JPG або PNG — підписаний оригінал від клієнта.
+        </div>
+      </form>
     </div>
   </div>
 
@@ -261,6 +291,18 @@ function openActDrawer(row) {
   if (d.pdf) { document.getElementById('act-drw-pdf-link').href = d.pdf; pdfEl.style.display = ''; }
   else pdfEl.style.display = 'none';
 
+  // Scan PDF
+  const scanEl = document.getElementById('act-drw-scan');
+  if (d.scan_pdf) {
+    document.getElementById('act-drw-scan-link').href = d.scan_pdf;
+    scanEl.style.display = '';
+  } else {
+    scanEl.style.display = 'none';
+  }
+
+  // Upload form
+  document.getElementById('act-upload-form').action = '/acts/' + d.no + '/upload-scan';
+
   document.getElementById('act-edit-link').href = '/acts/' + d.no + '/edit';
   document.getElementById('act-sign-form').action = '/acts/' + d.no + '/sign';
   document.getElementById('act-send-form').action = '/acts/' + d.no + '/send';
@@ -300,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'nopdf':       '⚠ Спочатку згенеруйте PDF акту.',
     'nosmtp':      '⚠ Email не налаштовано. Заповніть SMTP у файлі .env.',
     'email_error': '✕ Помилка відправки. Перевірте SMTP налаштування.',
+    'scan_ok':     '✓ Підписаний скан акту збережено.',
   };
   if (toast && msgs[toast]) {
     const type = toast === 'email_ok' ? 'success' : 'danger';

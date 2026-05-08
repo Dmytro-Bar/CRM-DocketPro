@@ -134,6 +134,20 @@
         </div>
       </div>
 
+      {# ── Нотатки ───────────────────────────────────────────── #}
+      <div class="card-head" style="border-top:1px solid var(--border)">
+        <h3 style="color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Нотатки</h3>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label>Контактні особи, додаткова пошта, примітки</label>
+          <textarea name="notes" maxlength="500" rows="4"
+                    placeholder="Контактна особа: Петренко Олег, +380501234567&#10;Email для листування: o.petrenko@client.ua&#10;..."
+                    style="resize:vertical;width:100%;font-size:13px">{{ contract.notes if contract else '' }}</textarea>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:3px">До 500 символів</div>
+        </div>
+      </div>
+
       {# ── Act template ──────────────────────────────────────── #}
       <div class="card-head" style="border-top:1px solid var(--border)">
         <h3 style="color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Шаблони</h3>
@@ -181,6 +195,59 @@
 
     </form>
   </div>
+
+  {# ── Скан підписаного договору (тільки при редагуванні) ─── #}
+  {% if contract %}
+  <div class="card" style="margin-top:16px">
+    <div class="card-head">
+      <h3>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--accent)">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        Підписаний скан договору
+      </h3>
+    </div>
+    <div class="card-body">
+      {% if contract.scan_path %}
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;
+                  background:var(--success-soft);border-radius:8px;border:1px solid color-mix(in oklch,var(--success) 30%,transparent)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success-fg)" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>
+        </svg>
+        <div style="flex:1;font-size:13px">
+          <strong style="color:var(--success-fg)">Скан завантажено</strong>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:2px">{{ contract.scan_path | replace(contracts_dir or '', '') | default('') }}</div>
+        </div>
+        <a href="{{ pdf_url(contract.scan_path) }}" target="_blank" class="btn btn-sm btn-secondary">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Переглянути
+        </a>
+      </div>
+      {% endif %}
+      <form method="post" action="/contracts/{{ contract.contract_no }}/upload-scan"
+            enctype="multipart/form-data">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="font-size:13px;color:var(--text-mute)">
+            {% if contract.scan_path %}Замінити скан:{% else %}Завантажити скан:{% endif %}
+          </label>
+          <input type="file" name="scan_file" accept=".pdf,.jpg,.jpeg,.png"
+                 style="font-size:13px;flex:1;min-width:200px"
+                 onchange="this.nextElementSibling.disabled = !this.value"/>
+          <button type="submit" class="btn btn-secondary" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>
+            Завантажити
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text-mute);margin-top:6px">
+          Дозволені формати: PDF, JPG, PNG · Максимум: без обмежень
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}
 

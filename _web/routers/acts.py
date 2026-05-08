@@ -2,7 +2,7 @@
 
 import os
 from datetime import date
-from fastapi import APIRouter, Request, Form, Query
+from fastapi import APIRouter, Request, Form, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -82,6 +82,7 @@ async def list_acts(
             "days":            days,
             "email_sent_date": r["email_sent_date"] or "",
             "client_email":    client_email,
+            "scan_pdf":        pdf_url(r["scan_path"]) if r["scan_path"] else "",
         })
 
     return templates.TemplateResponse("acts/list.html", {
@@ -526,3 +527,41 @@ async def send_act_email(act_no: str):
         return RedirectResponse(f"/acts?toast=email_ok&to={client_email}", status_code=303)
     except Exception:
         return RedirectResponse("/acts?toast=email_error", status_code=303)
+
+
+# ── Upload підписаного скану акту ────────────────────────────────
+
+@router.post("/{act_no}/upload-scan")
+async def upload_act_scan(
+    act_no: str,
+    scan_file: UploadFile = File(...),
+):
+    """Зберігає підписаний скан акту (PDF або фото)."""
+    with get_db() as db:
+        act = db.execute(
+            "SELECT client_name, contract_no FROM acts WHERE act_no=?", (act_no,)
+        ).fetchone()
+    if not act:
+        return HTMLResponse("Акт не знайдено", status_code=404)
+
+    ext = Path(scan_file.filename).suffix.lower()
+    if ext not in {".pdf", ".jpg", ".jpeg", ".png"}:
+        return HTMLResponse(f"Формат {ext} не підтримується. Дозволено: PDF, JPG, PNG", status_code=400)
+
+    from word_handler import _safe_folder_name
+    client_folder   = _safe_folder_name(act["client_name"] or "")
+    contract_folder = _safe_folder_name(act["contract_no"] or "")
+    folder = os.path.join(CONTRACTS_DIR, client_folder, f"Договір {contract_folder}", "Акти")
+    os.makedirs(folder, exist_ok=True)
+    save_path = os.path.join(folder, f"Скан_{act_no}{ext}")
+
+    content = await scan_file.read()
+    with open(save_path, "wb") as f:
+        f.write(content)
+
+    with get_db() as db:
+        db.execute(
+            "UPDATE acts SET scan_path=? WHERE act_no=?",
+            (save_path, act_no)
+        )
+    return RedirectResponse("/acts?toast=scan_ok", status_code=303)

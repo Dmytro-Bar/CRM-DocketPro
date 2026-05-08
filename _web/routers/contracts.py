@@ -1,6 +1,8 @@
 """Contracts CRUD router."""
 
-from fastapi import APIRouter, Request, Form, Query
+import os
+import shutil
+from fastapi import APIRouter, Request, Form, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -9,13 +11,35 @@ from datetime import date
 from urllib.parse import quote
 
 from database import get_db
-from models import fmt_money, fmt_date, norm, parse_date, make_xlsx
+from models import fmt_money, fmt_date, norm, parse_date, make_xlsx, pdf_url
+from config import CONTRACTS_DIR
 
 router = APIRouter(prefix="/contracts")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 templates.env.globals["fmt_money"] = fmt_money
 templates.env.globals["fmt_date"]  = fmt_date
 templates.env.globals["norm"]      = norm
+templates.env.globals["pdf_url"]   = pdf_url
+
+
+# ── Upload helpers ─────────────────────────────────────────────
+_ALLOWED_SCAN_EXT = {".pdf", ".jpg", ".jpeg", ".png"}
+
+def _safe_folder(name: str) -> str:
+    forbidden = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    r = name
+    for ch in forbidden:
+        r = r.replace(ch, "_")
+    return r.strip()
+
+def _contract_scan_path(client_name: str, contract_no: str, ext: str) -> str:
+    folder = os.path.join(
+        CONTRACTS_DIR,
+        _safe_folder(client_name),
+        f"Договір {_safe_folder(contract_no)}",
+    )
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, f"Скан_договору{ext}")
 
 # ── Act template helpers ───────────────────────────────────────
 _TMPL_DIR = Path(__file__).resolve().parent.parent.parent / "_templates"
@@ -193,6 +217,7 @@ async def new_contract_form(request: Request):
     return templates.TemplateResponse("contract_form.html", {
         "request": request, "contract": None, "clients": clients,
         "act_templates": _act_templates(), "title": "Новий договір",
+        "contracts_dir": CONTRACTS_DIR, "scan_uploaded": False,
     })
 
 
@@ -212,23 +237,24 @@ async def create_contract(
     hour_rate:     float = Form(0),
     nbu_rate:      float = Form(0),
     act_template:  str   = Form(""),
+    notes:         str   = Form(""),
 ):
     with get_db() as db:
         client_name = _client_name_for(db, edrpou)
         db.execute(
             "INSERT OR IGNORE INTO contracts "
             "(contract_no,edrpou,client_name,contract_date,contract_end,currency,"
-            "tariff_fx,type_rate,users,status,contract_type,subject,hour_rate,nbu_rate,act_template) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "tariff_fx,type_rate,users,status,contract_type,subject,hour_rate,nbu_rate,act_template,notes) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (contract_no, edrpou, client_name, contract_date, contract_end, currency,
              tariff_fx, type_rate, users, status, contract_type, subject,
-             hour_rate, nbu_rate, act_template)
+             hour_rate, nbu_rate, act_template, notes[:500])
         )
     return RedirectResponse("/contracts", status_code=303)
 
 
 @router.get("/{contract_no}/edit", response_class=HTMLResponse)
-async def edit_contract_form(contract_no: str, request: Request):
+async def edit_contract_form(contract_no: str, request: Request, scan: str = ""):
     with get_db() as db:
         contract = db.execute(
             "SELECT * FROM contracts WHERE contract_no=?", (contract_no,)
@@ -239,6 +265,8 @@ async def edit_contract_form(contract_no: str, request: Request):
     return templates.TemplateResponse("contract_form.html", {
         "request": request, "contract": contract, "clients": clients,
         "act_templates": _act_templates(), "title": f"Договір {contract_no}",
+        "contracts_dir": CONTRACTS_DIR,
+        "scan_uploaded": scan == "ok",
     })
 
 
@@ -274,16 +302,47 @@ async def update_contract(
     hour_rate:     float = Form(0),
     nbu_rate:      float = Form(0),
     act_template:  str   = Form(""),
+    notes:         str   = Form(""),
 ):
     with get_db() as db:
         client_name = _client_name_for(db, edrpou)
         db.execute(
             "UPDATE contracts SET edrpou=?,client_name=?,contract_date=?,"
             "contract_end=?,currency=?,tariff_fx=?,type_rate=?,users=?,status=?,"
-            "contract_type=?,subject=?,hour_rate=?,nbu_rate=?,act_template=? "
+            "contract_type=?,subject=?,hour_rate=?,nbu_rate=?,act_template=?,notes=? "
             "WHERE contract_no=?",
             (edrpou, client_name, contract_date, contract_end, currency,
              tariff_fx, type_rate, users, status, contract_type, subject,
-             hour_rate, nbu_rate, act_template, contract_no)
+             hour_rate, nbu_rate, act_template, notes[:500], contract_no)
         )
     return RedirectResponse("/contracts", status_code=303)
+
+
+@router.post("/{contract_no}/upload-scan")
+async def upload_contract_scan(
+    contract_no: str,
+    scan_file: UploadFile = File(...),
+):
+    """Завантажує підписаний скан договору."""
+    with get_db() as db:
+        contract = db.execute(
+            "SELECT client_name FROM contracts WHERE contract_no=?", (contract_no,)
+        ).fetchone()
+    if not contract:
+        return HTMLResponse("Договір не знайдено", status_code=404)
+
+    ext = Path(scan_file.filename).suffix.lower()
+    if ext not in _ALLOWED_SCAN_EXT:
+        return HTMLResponse(f"Формат {ext} не підтримується. Дозволено: PDF, JPG, PNG", status_code=400)
+
+    save_path = _contract_scan_path(contract["client_name"], contract_no, ext)
+    content = await scan_file.read()
+    with open(save_path, "wb") as f:
+        f.write(content)
+
+    with get_db() as db:
+        db.execute(
+            "UPDATE contracts SET scan_path=? WHERE contract_no=?",
+            (save_path, contract_no)
+        )
+    return RedirectResponse(f"/contracts/{contract_no}/edit?scan=ok", status_code=303)

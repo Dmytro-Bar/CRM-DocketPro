@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Request, Form, Query
+from fastapi import APIRouter, Request, Form, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -118,6 +118,7 @@ async def list_invoices(
             "reminder_pdf":     pdf_url(r["reminder_pdf_path"]) if r["reminder_pdf_path"] else "",
             "email_sent_date":  r["email_sent_date"] or "",
             "client_email":     client_email,
+            "signed_pdf":       pdf_url(r["signed_path"]) if r["signed_path"] else "",
         })
 
     return templates.TemplateResponse("invoices/list.html", {
@@ -676,8 +677,11 @@ async def send_invoice_email(invoice_no: str):
     if not client_email:
         return RedirectResponse("/invoices?toast=noemail", status_code=303)
 
-    pdf_path = inv["pdf_path"] or ""
-    if not pdf_path or not os.path.exists(pdf_path):
+    # Prefer signed version if available
+    signed_path = inv["signed_path"] or ""
+    pdf_path    = inv["pdf_path"] or ""
+    attach_path = signed_path if (signed_path and os.path.exists(signed_path)) else pdf_path
+    if not attach_path or not os.path.exists(attach_path):
         return RedirectResponse("/invoices?toast=nopdf", status_code=303)
 
     sum_uah = float(inv["sum_uah"] or 0)
@@ -692,7 +696,7 @@ async def send_invoice_email(invoice_no: str):
                 due_date=inv["due_date"] or "",
                 our_name=EMAIL_FROM_NAME,
             ),
-            attachment_path=pdf_path,
+            attachment_path=attach_path,
             attachment_name=f"Рахунок_{invoice_no}.pdf",
         )
         with get_db() as db:
@@ -703,3 +707,43 @@ async def send_invoice_email(invoice_no: str):
         return RedirectResponse(f"/invoices?toast=email_ok&to={client_email}", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/invoices?toast=email_error", status_code=303)
+
+
+# ── Upload підписаного PDF рахунку ───────────────────────────────
+
+@router.post("/{invoice_no}/upload-signed")
+async def upload_signed_invoice(
+    invoice_no: str,
+    signed_file: UploadFile = File(...),
+):
+    """Зберігає підписаний PDF рахунку (після підпису в Preview)."""
+    with get_db() as db:
+        inv = db.execute(
+            "SELECT client_name, contract_no FROM invoices WHERE invoice_no=?",
+            (invoice_no,)
+        ).fetchone()
+    if not inv:
+        return HTMLResponse("Рахунок не знайдено", status_code=404)
+
+    ext = Path(signed_file.filename).suffix.lower()
+    if ext not in {".pdf", ".jpg", ".jpeg", ".png"}:
+        return HTMLResponse(f"Формат {ext} не підтримується. Дозволено: PDF, JPG, PNG", status_code=400)
+
+    # Save next to the original invoice PDF
+    from word_handler import _safe_folder_name
+    client_folder   = _safe_folder_name(inv["client_name"] or "")
+    contract_folder = _safe_folder_name(inv["contract_no"] or "")
+    folder = os.path.join(CONTRACTS_DIR, client_folder, f"Договір {contract_folder}", "Рахунки")
+    os.makedirs(folder, exist_ok=True)
+    save_path = os.path.join(folder, f"Підписаний_{invoice_no}{ext}")
+
+    content = await signed_file.read()
+    with open(save_path, "wb") as f:
+        f.write(content)
+
+    with get_db() as db:
+        db.execute(
+            "UPDATE invoices SET signed_path=? WHERE invoice_no=?",
+            (save_path, invoice_no)
+        )
+    return RedirectResponse("/invoices?toast=signed_ok", status_code=303)

@@ -162,6 +162,7 @@
           "overdue":       item.overdue,
           "overdue_days":  item.overdue_days,
           "pdf":           pdf_url(r.pdf_path) if r.pdf_path else "",
+          "signed_pdf":    item.signed_pdf,
           "contract":      r.contract_no or "",
           "reminder_date":   item.reminder_date,
           "reminder_pdf":    item.reminder_pdf,
@@ -313,6 +314,35 @@
         Відкрити PDF рахунку
       </a>
     </div>
+    {# ── Підписана версія ── #}
+    <div id="drw-signed-block" style="margin-top:8px;display:none">
+      <a id="drw-signed-link" href="#" target="_blank" class="btn btn-secondary"
+         style="width:100%;justify-content:center;background:color-mix(in oklch,var(--success) 12%,transparent);color:var(--success-fg);border-color:color-mix(in oklch,var(--success) 30%,transparent)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+          <path d="M8 12l3 3 5-5"/>
+        </svg>
+        Підписаний PDF
+      </a>
+    </div>
+    {# ── Завантажити підписаний PDF ── #}
+    <div id="drw-upload-signed-block" style="margin-top:8px;display:none">
+      <form method="post" id="drw-upload-form" enctype="multipart/form-data">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:12px;color:var(--text-mute);white-space:nowrap">Підписаний PDF:</label>
+          <input type="file" name="signed_file" accept=".pdf,.jpg,.jpeg,.png"
+                 style="font-size:12px;flex:1;min-width:0"
+                 onchange="this.nextElementSibling.disabled = !this.value"/>
+          <button type="submit" class="btn btn-sm btn-ghost" disabled
+                  title="Завантажити підписану версію (після підпису в Preview)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>
+          </button>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-mute);margin-top:4px">
+          Підпишіть PDF у Preview → завантажте тут. При відправці email буде підписана версія.
+        </div>
+      </form>
+    </div>
     <div id="drw-reminder-pdf-block" style="margin-top:8px;display:none">
       <a id="drw-reminder-pdf-link" href="#" target="_blank" class="btn btn-ghost" style="width:100%;justify-content:center">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
@@ -376,6 +406,25 @@ function openInvDrawer(row) {
   const pdfBlock = document.getElementById('drw-pdf-block');
   if (d.pdf) { document.getElementById('drw-pdf-link').href = d.pdf; pdfBlock.style.display = ''; }
   else { pdfBlock.style.display = 'none'; }
+
+  // Signed PDF
+  const signedBlock = document.getElementById('drw-signed-block');
+  if (d.signed_pdf) {
+    document.getElementById('drw-signed-link').href = d.signed_pdf;
+    signedBlock.style.display = '';
+  } else {
+    signedBlock.style.display = 'none';
+  }
+
+  // Upload signed block (only when invoice has a PDF generated)
+  const uploadSignedBlock = document.getElementById('drw-upload-signed-block');
+  const uploadForm = document.getElementById('drw-upload-form');
+  if (d.pdf) {
+    uploadSignedBlock.style.display = '';
+    uploadForm.action = '/invoices/' + d.no + '/upload-signed';
+  } else {
+    uploadSignedBlock.style.display = 'none';
+  }
 
   // Actions
   document.getElementById('drw-edit-link').href = '/invoices/' + d.no + '/edit';
@@ -487,6 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'nosmtp':      '⚠ Email не налаштовано. Заповніть SMTP у файлі .env.',
     'email_error': '✕ Помилка відправки. Перевірте SMTP налаштування.',
     'notfound':    '✕ Рахунок не знайдено.',
+    'signed_ok':   '✓ Підписаний PDF рахунку збережено.',
   };
   if (toast && msgs[toast]) {
     const type = toast === 'email_ok' ? 'success' : 'danger';
