@@ -170,7 +170,40 @@ body {
   display: grid;
   grid-template-columns: 232px 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 0.22s ease;
 }
+
+/* ── Sidebar collapse ─────────────────────────────────────── */
+.brand-label { min-width: 0; flex: 1; overflow: hidden; }
+
+.sidebar-collapse-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-mute);
+  padding: 3px 4px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+  margin-left: auto;
+}
+.sidebar-collapse-btn:hover { color: var(--text); background: var(--bg-soft); }
+
+/* Collapsed state */
+.app.sidebar-collapsed { grid-template-columns: 54px 1fr; }
+.app.sidebar-collapsed .sidebar { padding: 18px 6px; overflow: hidden; }
+.app.sidebar-collapsed .brand { padding: 6px 0 18px; justify-content: center; gap: 0; }
+.app.sidebar-collapsed .brand-label,
+.app.sidebar-collapsed .nav-item span,
+.app.sidebar-collapsed .nav-section,
+.app.sidebar-collapsed .badge-count,
+.app.sidebar-collapsed .user-card > div:last-child { display: none; }
+.app.sidebar-collapsed .brand-mark { margin: 0 auto; }
+.app.sidebar-collapsed .nav-item { justify-content: center; padding: 9px 0; }
+.app.sidebar-collapsed .user-card { justify-content: center; padding: 10px 0 4px; }
+.app.sidebar-collapsed .sidebar-collapse-btn { margin: 0 auto; }
 
 /* Sidebar */
 .sidebar {

@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
 from database import get_db
-from models import fmt_money, fmt_date, norm, parse_date, pdf_url, make_xlsx
+from models import fmt_money, fmt_date, norm, parse_date, pdf_url, make_xlsx, get_active_emails
 
 from utils import amount_to_words_uah, fmt_money as _app_fmt_money
 from word_handler import (generate_act_with_template, resolve_act_template,
@@ -60,8 +60,10 @@ async def list_acts(
             "SELECT DISTINCT client_name FROM acts ORDER BY client_name"
         ).fetchall()
         client_emails = {
-            c["edrpou"]: (c["email"] or "").strip()
-            for c in db.execute("SELECT edrpou, email FROM clients").fetchall()
+            c["edrpou"]: get_active_emails(c)
+            for c in db.execute(
+                "SELECT edrpou, email, email_active, email2, email2_active, email3, email3_active FROM clients"
+            ).fetchall()
         }
         contract_edrpou = {
             c["contract_no"]: c["edrpou"]
@@ -75,7 +77,7 @@ async def list_acts(
         ad = parse_date(r["act_date"])
         days = (today - ad).days if ad else 0
         edrpou = contract_edrpou.get(r["contract_no"] or "", "")
-        client_email = client_emails.get(edrpou, "")
+        client_email = ", ".join(client_emails.get(edrpou, []))
         acts.append({
             "row":             r,
             "status":          st,
@@ -491,24 +493,26 @@ async def send_act_email(act_no: str):
             "SELECT * FROM contracts WHERE contract_no=?", (act["contract_no"],)
         ).fetchone() if act["contract_no"] else None
 
-        client_email = ""
+        client_emails_list = []
         if contract:
             ce = db.execute(
-                "SELECT email FROM clients WHERE edrpou=?", (contract["edrpou"],)
+                "SELECT email, email_active, email2, email2_active, email3, email3_active "
+                "FROM clients WHERE edrpou=?", (contract["edrpou"],)
             ).fetchone()
-            client_email = (ce["email"] or "").strip() if ce else ""
+            client_emails_list = get_active_emails(ce) if ce else []
 
-    if not client_email:
+    if not client_emails_list:
         return RedirectResponse("/acts?toast=noemail", status_code=303)
 
     pdf_path = act["pdf_path"] or ""
     if not pdf_path or not os.path.exists(pdf_path):
         return RedirectResponse("/acts?toast=nopdf", status_code=303)
 
-    sum_uah = float(act["sum_uah"] or 0)
+    sum_uah    = float(act["sum_uah"] or 0)
+    to_display = ", ".join(client_emails_list)
     try:
         await send_email(
-            to_email=client_email,
+            to_email=client_emails_list,
             subject=f"Акт виконаних робіт {act_no}",
             body_html=body_act(
                 act_no=act_no,
@@ -524,7 +528,7 @@ async def send_act_email(act_no: str):
                 "UPDATE acts SET email_sent_date=? WHERE act_no=?",
                 (date.today().strftime("%d.%m.%Y"), act_no)
             )
-        return RedirectResponse(f"/acts?toast=email_ok&to={client_email}", status_code=303)
+        return RedirectResponse(f"/acts?toast=email_ok&to={to_display}", status_code=303)
     except Exception:
         return RedirectResponse("/acts?toast=email_error", status_code=303)
 

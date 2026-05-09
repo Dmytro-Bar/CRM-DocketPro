@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
 from database import get_db
-from models import fmt_money, fmt_date, norm, parse_date, is_overdue, pdf_url, make_xlsx
+from models import fmt_money, fmt_date, norm, parse_date, is_overdue, pdf_url, make_xlsx, get_active_emails
 
 from utils import (calc_due_date_access, count_months,
                    amount_to_words_uah, calc_access_tariff_uah,
@@ -69,10 +69,12 @@ async def list_invoices(
         clients = db.execute(
             "SELECT DISTINCT client_name FROM invoices ORDER BY client_name"
         ).fetchall()
-        # Build email lookup: edrpou → email
+        # Build email lookup: edrpou → list of active emails
         client_emails = {
-            c["edrpou"]: (c["email"] or "").strip()
-            for c in db.execute("SELECT edrpou, email FROM clients").fetchall()
+            c["edrpou"]: get_active_emails(c)
+            for c in db.execute(
+                "SELECT edrpou, email, email_active, email2, email2_active, email3, email3_active FROM clients"
+            ).fetchall()
         }
         # contract_no → edrpou lookup
         contract_edrpou = {
@@ -105,9 +107,9 @@ async def list_invoices(
         due_d = parse_date(r["due_date"])
         overdue_days = (today - due_d).days if (due_d and today > due_d and st not in ("Оплачено", "Скасовано")) else 0
 
-        # Resolve client email via contract → edrpou → clients
+        # Resolve active client emails via contract → edrpou → clients
         edrpou = contract_edrpou.get(r["contract_no"] or "", "")
-        client_email = client_emails.get(edrpou, "")
+        client_email = ", ".join(client_emails.get(edrpou, []))
 
         invoices.append({
             "row":              r,
@@ -615,13 +617,14 @@ async def send_reminder(invoice_no: str):
 
         # Якщо є email клієнта та SMTP налаштовано — також відправити листом
         if email_configured() and client_row:
-            client_email = ""
+            client_email = []
             if contract:
                 with get_db() as db:
                     ce = db.execute(
-                        "SELECT email FROM clients WHERE edrpou=?", (contract["edrpou"],)
+                        "SELECT email, email_active, email2, email2_active, email3, email3_active "
+                        "FROM clients WHERE edrpou=?", (contract["edrpou"],)
                     ).fetchone()
-                    client_email = (ce["email"] or "").strip() if ce else ""
+                    client_email = get_active_emails(ce) if ce else []
             if client_email:
                 overdue_days_int = int(overdue_days)
                 if overdue_days_int > 0:
@@ -630,7 +633,7 @@ async def send_reminder(invoice_no: str):
                     due_line = f"Термін оплати: {inv['due_date'] or ''}."
                 subject = f"Нагадування: рахунок {invoice_no}"
                 await send_email(
-                    to_email=client_email,
+                    to_email=client_email,  # list of active emails
                     subject=subject,
                     body_html=body_reminder(
                         invoice_no=invoice_no,
@@ -667,14 +670,15 @@ async def send_invoice_email(invoice_no: str):
             "SELECT * FROM contracts WHERE contract_no=?", (inv["contract_no"],)
         ).fetchone() if inv["contract_no"] else None
 
-        client_email = ""
+        client_emails_list = []
         if contract:
             ce = db.execute(
-                "SELECT email FROM clients WHERE edrpou=?", (contract["edrpou"],)
+                "SELECT email, email_active, email2, email2_active, email3, email3_active "
+                "FROM clients WHERE edrpou=?", (contract["edrpou"],)
             ).fetchone()
-            client_email = (ce["email"] or "").strip() if ce else ""
+            client_emails_list = get_active_emails(ce) if ce else []
 
-    if not client_email:
+    if not client_emails_list:
         return RedirectResponse("/invoices?toast=noemail", status_code=303)
 
     # Prefer signed version if available
@@ -685,9 +689,10 @@ async def send_invoice_email(invoice_no: str):
         return RedirectResponse("/invoices?toast=nopdf", status_code=303)
 
     sum_uah = float(inv["sum_uah"] or 0)
+    to_display = ", ".join(client_emails_list)
     try:
         await send_email(
-            to_email=client_email,
+            to_email=client_emails_list,
             subject=f"Рахунок {invoice_no}",
             body_html=body_invoice(
                 invoice_no=invoice_no,
@@ -704,7 +709,7 @@ async def send_invoice_email(invoice_no: str):
                 "UPDATE invoices SET email_sent_date=? WHERE invoice_no=?",
                 (fmt_date(date.today()), invoice_no)
             )
-        return RedirectResponse(f"/invoices?toast=email_ok&to={client_email}", status_code=303)
+        return RedirectResponse(f"/invoices?toast=email_ok&to={to_display}", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/invoices?toast=email_error", status_code=303)
 

@@ -27,16 +27,22 @@ from config import (
 # ── Core sender ───────────────────────────────────────────────────
 
 def _send_sync(
-    to_email: str,
+    to_email: "str | list",
     subject: str,
     body_html: str,
     attachment_path: Optional[str] = None,
     attachment_name: Optional[str] = None,
 ) -> None:
-    """Blocking SMTP send. Runs in thread pool — do not call from async context directly."""
+    """Blocking SMTP send. Runs in thread pool — do not call from async context directly.
+    to_email can be a single address string or a list of address strings."""
+    recipients = [to_email] if isinstance(to_email, str) else list(to_email)
+    recipients = [e.strip() for e in recipients if e and str(e).strip()]
+    if not recipients:
+        return
+
     msg = MIMEMultipart("mixed")
     msg["From"]    = f"{EMAIL_FROM_NAME} <{EMAIL_FROM}>"
-    msg["To"]      = to_email
+    msg["To"]      = ", ".join(recipients)
     msg["Subject"] = Header(subject, "utf-8").encode()
 
     msg.attach(MIMEText(body_html, "html", "utf-8"))
@@ -60,24 +66,25 @@ def _send_sync(
         # SSL from the start (ukr.net, meta.ua)
         with smtplib.SMTP_SSL(SMTP_HOST, port, context=ctx) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, to_email, msg.as_bytes())
+            server.sendmail(EMAIL_FROM, recipients, msg.as_bytes())
     else:
         # STARTTLS (Gmail port 587, most other providers)
         with smtplib.SMTP(SMTP_HOST, port) as server:
             server.ehlo()
             server.starttls(context=ctx)
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, to_email, msg.as_bytes())
+            server.sendmail(EMAIL_FROM, recipients, msg.as_bytes())
 
 
 async def send_email(
-    to_email: str,
+    to_email: "str | list",
     subject: str,
     body_html: str,
     attachment_path: Optional[str] = None,
     attachment_name: Optional[str] = None,
 ) -> None:
-    """Async wrapper — runs SMTP in thread pool, does not block the event loop."""
+    """Async wrapper — runs SMTP in thread pool, does not block the event loop.
+    to_email can be a single address string or a list of address strings."""
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
         None,

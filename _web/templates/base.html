@@ -32,10 +32,17 @@
     <!-- Brand -->
     <div class="brand">
       <div class="brand-mark">D</div>
-      <div>
+      <div class="brand-label">
         <div class="brand-text">DocketPro</div>
         <div class="brand-sub">CRM</div>
       </div>
+      <button class="sidebar-collapse-btn" id="sidebar-toggle-btn"
+              onclick="toggleSidebar()" title="Згорнути панель">
+        <svg id="sidebar-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
     </div>
 
     <!-- Nav: Робота -->
@@ -269,6 +276,29 @@ function tableSearch(input, selector) {
 function fmtMoney(n) {
   return '₴ ' + Math.round(n).toLocaleString('uk-UA');
 }
+
+// ── Sidebar collapse ─────────────────────────────────────────
+function toggleSidebar() {
+  const app  = document.querySelector('.app');
+  const icon = document.getElementById('sidebar-toggle-icon');
+  const collapsed = app.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+  if (icon) {
+    icon.innerHTML = collapsed
+      ? '<path d="M9 18l6-6-6-6"/>'   // → expand arrow
+      : '<path d="M15 18l-6-6 6-6"/>'; // ← collapse arrow
+  }
+}
+// Restore on load
+(function() {
+  if (localStorage.getItem('sidebar-collapsed') === '1') {
+    document.querySelector('.app').classList.add('sidebar-collapsed');
+    document.addEventListener('DOMContentLoaded', () => {
+      const icon = document.getElementById('sidebar-toggle-icon');
+      if (icon) icon.innerHTML = '<path d="M9 18l6-6-6-6"/>';
+    });
+  }
+})();
 
 // ── Bulk select ──────────────────────────────────────────────
 function initBulkSelect(tableId) {

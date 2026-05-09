@@ -125,7 +125,7 @@ def compute_kpi(date_from: date, date_to: date,
             if pto and cno:
                 existing = last_inv_period.get(cno)
                 if not existing or pto > existing["to"]:
-                    last_inv_period[cno] = {"from": pfrom, "to": pto}
+                    last_inv_period[cno] = {"from": pfrom, "to": pto, "sum_uah": sum_uah}
 
             # A) Invoiced in period
             if inv_date and date_from <= inv_date <= date_to:
@@ -178,6 +178,24 @@ def compute_kpi(date_from: date, date_to: date,
             0 if i["is_overdue"] else (1 if i["status"] != "Оплачено" else 2),
             -i["overdue_days"]
         ))
+
+        # ── MRR / ARR (active Доступ contracts, normalized to /month) ──
+        mrr = 0.0
+        for c in contracts_list:
+            if c["status"] != "Активний" or c["ctype"] != "Доступ" or not c["ok"]:
+                continue
+            info = last_inv_period.get(c["no"])
+            if not info:
+                continue
+            pf = info["from"]
+            pt = info["to"]
+            sv = info.get("sum_uah", 0)
+            if pf and pt:
+                mc = (pt.year * 12 + pt.month) - (pf.year * 12 + pf.month) + 1
+                mc = max(1, mc)
+            else:
+                mc = 3  # default quarterly
+            mrr += sv / mc
 
         # ── Acts ──────────────────────────────────────────────
         rows_a = db.execute("SELECT * FROM acts").fetchall()
@@ -566,6 +584,8 @@ def compute_kpi(date_from: date, date_to: date,
         "app_payments_list":       app_payments_list,
         "access_revenue_all_time": access_revenue_all_time,
         "roi":                     roi,
+        "mrr":                     round(mrr, 2),
+        "arr":                     round(mrr * 12, 2),
         "months_chart":            months_chart,
         "expiring_contracts":      expiring_contracts,
         "trend":                   trend,

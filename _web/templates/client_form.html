@@ -2,6 +2,22 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 
+<style>
+/* Email toggle switch */
+.em-toggle { display:none }
+.em-toggle + .em-pill {
+  display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 10px 2px 4px;
+  border-radius:20px;background:#e2e8f0;font-size:11px;font-weight:500;color:#64748b;
+  user-select:none;transition:background 0.2s,color 0.2s;white-space:nowrap
+}
+.em-toggle + .em-pill::before {
+  content:'';flex-shrink:0;width:14px;height:14px;border-radius:50%;
+  background:#94a3b8;transition:background 0.15s
+}
+.em-toggle:checked + .em-pill { background:#dcfce7;color:#15803d }
+.em-toggle:checked + .em-pill::before { background:#22c55e }
+</style>
+
 <div style="max-width:560px">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
     <a href="/clients" style="color:#94a3b8;text-decoration:none;font-size:13px">← Клієнти</a>
@@ -25,15 +41,66 @@
         <label>Директор</label>
         <input type="text" name="director" value="{{ client.director if client else '' }}"/>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="field">
-          <label>Email</label>
-          <input type="text" name="email" value="{{ client.email if client else '' }}"/>
-        </div>
-        <div class="field">
-          <label>Телефон</label>
-          <input type="text" name="phone" value="{{ client.phone if client else '' }}"/>
-        </div>
+
+      <!-- Email 1 -->
+      <div class="field">
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          <span>Email 1</span>
+          <label style="cursor:pointer">
+            <input type="checkbox" class="em-toggle" name="email_active" value="1"
+              {% if not client or client.email_active != 0 %}checked{% endif %}
+              onchange="this.nextElementSibling.textContent=this.checked?'Активний':'Неактивний'">
+            <span class="em-pill">{% if not client or client.email_active != 0 %}Активний{% else %}Неактивний{% endif %}</span>
+          </label>
+        </label>
+        <input type="text" name="email" value="{{ client.email if client else '' }}"
+               placeholder="name@company.com"/>
+      </div>
+
+      <!-- Email 2 -->
+      <div class="field">
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          <span>Email 2 <span style="font-size:11px;color:#94a3b8">(необов'язковий)</span></span>
+          <label style="cursor:pointer">
+            <input type="checkbox" class="em-toggle" name="email2_active" value="1"
+              {% if client and client.email2_active %}checked{% endif %}
+              onchange="this.nextElementSibling.textContent=this.checked?'Активний':'Неактивний'">
+            <span class="em-pill">{% if client and client.email2_active %}Активний{% else %}Неактивний{% endif %}</span>
+          </label>
+        </label>
+        <input type="text" name="email2" value="{{ client.email2 if client else '' }}"
+               placeholder="name2@company.com"/>
+      </div>
+
+      <!-- Email 3 -->
+      <div class="field">
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          <span>Email 3 <span style="font-size:11px;color:#94a3b8">(необов'язковий)</span></span>
+          <label style="cursor:pointer">
+            <input type="checkbox" class="em-toggle" name="email3_active" value="1"
+              {% if client and client.email3_active %}checked{% endif %}
+              onchange="this.nextElementSibling.textContent=this.checked?'Активний':'Неактивний'">
+            <span class="em-pill">{% if client and client.email3_active %}Активний{% else %}Неактивний{% endif %}</span>
+          </label>
+        </label>
+        <input type="text" name="email3" value="{{ client.email3 if client else '' }}"
+               placeholder="name3@company.com"/>
+      </div>
+
+      <!-- Vchasno -->
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Email у Вчасно
+          <span style="font-size:11px;color:#94a3b8;font-weight:400">(для EDM підписання)</span>
+        </label>
+        <input type="text" name="vchasno_email" value="{{ client.vchasno_email if client else '' }}"
+               placeholder="email@company.com (якщо відрізняється від основного)"/>
+      </div>
+
+      <div class="field">
+        <label>Телефон</label>
+        <input type="text" name="phone" value="{{ client.phone if client else '' }}"/>
       </div>
       <div class="field">
         <label>Адреса</label>

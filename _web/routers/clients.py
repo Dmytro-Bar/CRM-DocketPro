@@ -1,12 +1,13 @@
 """Clients CRUD router."""
 
+from typing import Optional
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
 from database import get_db
-from models import fmt_money, fmt_date, norm, make_xlsx
+from models import fmt_money, fmt_date, norm, make_xlsx, get_active_emails
 
 router = APIRouter(prefix="/clients")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -42,9 +43,10 @@ async def export_clients(q: str = Query(default="")):
     with get_db() as db:
         rows = db.execute(sql, args).fetchall()
 
-    headers = ["ЄДРПОУ", "Назва", "Директор", "Email", "Телефон", "Адреса", "Статус"]
+    headers = ["ЄДРПОУ", "Назва", "Директор", "Email 1", "Email 2", "Email 3", "Телефон", "Адреса", "Статус"]
     data = [
-        [r["edrpou"], r["name"], r["director"], r["email"],
+        [r["edrpou"], r["name"], r["director"],
+         r["email"] or "", r["email2"] or "", r["email3"] or "",
          r["phone"], r["address"], norm(r["status"])]
         for r in rows
     ]
@@ -68,20 +70,34 @@ async def new_client_form(request: Request):
 @router.post("/new")
 async def create_client(
     request: Request,
-    edrpou:   str = Form(...),
-    name:     str = Form(...),
-    director: str = Form(""),
-    email:    str = Form(""),
-    phone:    str = Form(""),
-    address:  str = Form(""),
-    status:   str = Form("Активний"),
+    edrpou:        str           = Form(...),
+    name:          str           = Form(...),
+    director:      str           = Form(""),
+    email:         str           = Form(""),
+    email_active:  Optional[str] = Form(None),
+    email2:        str           = Form(""),
+    email2_active: Optional[str] = Form(None),
+    email3:        str           = Form(""),
+    email3_active: Optional[str] = Form(None),
+    phone:         str           = Form(""),
+    address:       str           = Form(""),
+    status:        str           = Form("Активний"),
+    vchasno_email: str           = Form(""),
 ):
+    ea1 = 1 if email_active  else 0
+    ea2 = 1 if email2_active else 0
+    ea3 = 1 if email3_active else 0
     with get_db() as db:
         db.execute(
-            "INSERT OR IGNORE INTO clients (edrpou, name, director, email, phone, address, status) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (edrpou.strip(), name.strip(), director.strip(), email.strip(),
-             phone.strip(), address.strip(), status)
+            "INSERT OR IGNORE INTO clients "
+            "(edrpou, name, director, email, email_active, email2, email2_active, "
+            " email3, email3_active, phone, address, status, vchasno_email) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (edrpou.strip(), name.strip(), director.strip(),
+             email.strip(), ea1,
+             email2.strip(), ea2,
+             email3.strip(), ea3,
+             phone.strip(), address.strip(), status, vchasno_email.strip())
         )
     return RedirectResponse("/clients", status_code=303)
 
@@ -125,18 +141,32 @@ async def delete_client(edrpou: str):
 @router.post("/{edrpou}/edit")
 async def update_client(
     edrpou: str,
-    name:     str = Form(...),
-    director: str = Form(""),
-    email:    str = Form(""),
-    phone:    str = Form(""),
-    address:  str = Form(""),
-    status:   str = Form("Активний"),
+    name:          str           = Form(...),
+    director:      str           = Form(""),
+    email:         str           = Form(""),
+    email_active:  Optional[str] = Form(None),
+    email2:        str           = Form(""),
+    email2_active: Optional[str] = Form(None),
+    email3:        str           = Form(""),
+    email3_active: Optional[str] = Form(None),
+    phone:         str           = Form(""),
+    address:       str           = Form(""),
+    status:        str           = Form("Активний"),
+    vchasno_email: str           = Form(""),
 ):
+    ea1 = 1 if email_active  else 0
+    ea2 = 1 if email2_active else 0
+    ea3 = 1 if email3_active else 0
     with get_db() as db:
         db.execute(
-            "UPDATE clients SET name=?, director=?, email=?, phone=?, address=?, status=? "
+            "UPDATE clients SET name=?, director=?, "
+            "email=?, email_active=?, email2=?, email2_active=?, "
+            "email3=?, email3_active=?, phone=?, address=?, status=?, vchasno_email=? "
             "WHERE edrpou=?",
-            (name.strip(), director.strip(), email.strip(), phone.strip(),
-             address.strip(), status, edrpou)
+            (name.strip(), director.strip(),
+             email.strip(), ea1,
+             email2.strip(), ea2,
+             email3.strip(), ea3,
+             phone.strip(), address.strip(), status, vchasno_email.strip(), edrpou)
         )
     return RedirectResponse("/clients", status_code=303)

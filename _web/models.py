@@ -170,6 +170,28 @@ def make_xlsx(headers: list, rows: list, sheet_name: str = "Дані") -> "io.By
     return buf
 
 
+# --- Client email helpers ---
+
+def get_active_emails(client_row) -> list:
+    """Return list of active email addresses for a client sqlite3.Row."""
+    result = []
+    for email_key, active_key, default_active in [
+        ("email",  "email_active",  1),
+        ("email2", "email2_active", 0),
+        ("email3", "email3_active", 0),
+    ]:
+        try:
+            e = (client_row[email_key] or "").strip()
+            a = client_row[active_key]
+            if a is None:
+                a = default_active
+            if e and int(a):
+                result.append(e)
+        except (IndexError, KeyError):
+            break
+    return result
+
+
 # --- Categories ---
 
 EXPENSE_CATEGORIES = [
