@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Податки — DocketPro{% endblock %}
+{% block page_title %}Податки{% endblock %}
+{% block page_sub %}ФОП 3 група, ЄП {{ "%.0f"|format(ep_rate*100) }}% + ВЗ {{ "%.0f"|format(vz_rate*100) }}%{% endblock %}
+
+{% block content %}
+
+{% if not tax_data %}
+<!-- Empty state -->
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:12px;color:var(--text-mute);text-align:center;">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3">
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+    <path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>
+  </svg>
+  <div style="font-size:15px;font-weight:600;color:var(--text);">Немає даних</div>
+  <div style="font-size:13px;">Оплачені рахунки та записи в Оплатах з'являться тут</div>
+</div>
+
+{% else %}
+
+<!-- Year tabs -->
+<div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;" id="year-tabs">
+  {% for year in years %}
+  <button
+    class="btn {% if year == active_year %}btn-primary{% else %}btn-ghost{% endif %}"
+    style="font-variant-numeric:tabular-nums;"
+    onclick="switchYear({{ year }})"
+    id="tab-{{ year }}"
+  >{{ year }}</button>
+  {% endfor %}
+</div>
+
+<!-- Year panels -->
+{% for year in years %}
+<div id="panel-{{ year }}" {% if year != active_year %}style="display:none"{% endif %}>
+
+  <!-- Summary row for this year -->
+  {% set yr_rows = tax_data[year] %}
+  {% set annual = yr_rows[-1] %}
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
+
+    <div class="card" style="padding:16px 20px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:4px;">Дохід за рік</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--font-mono);color:var(--text);">₴{{ fmt_money(annual.cumulative_income) }}</div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:4px;">ЄП {{ "%.0f"|format(ep_rate*100) }}% за рік</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--font-mono);color:var(--accent);">₴{{ fmt_money(annual.ep_cumulative) }}</div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:4px;">ВЗ {{ "%.0f"|format(vz_rate*100) }}% за рік</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--font-mono);color:var(--warning);">₴{{ fmt_money(annual.vz_cumulative) }}</div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;background:color-mix(in oklch,var(--danger) 6%,var(--surface));">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);margin-bottom:4px;">Усього податків</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--font-mono);color:var(--danger);">₴{{ fmt_money(annual.total_tax_cumulative) }}</div>
+    </div>
+
+  </div>
+
+  <!-- Main tax table -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="tbl" id="tax-table-{{ year }}">
+      <thead>
+        <tr>
+          <th style="width:160px;">Звітний період</th>
+          <th style="text-align:right;">Дохід за квартал</th>
+          <th style="text-align:right;background:color-mix(in oklch,var(--accent) 4%,transparent);">Наростаючим</th>
+          <th style="text-align:right;">ЄП {{ "%.0f"|format(ep_rate*100) }}% (квартал)</th>
+          <th style="text-align:right;">ВЗ {{ "%.0f"|format(vz_rate*100) }}% (квартал)</th>
+          <th style="text-align:right;">Податок (квартал)</th>
+          <th style="text-align:right;background:color-mix(in oklch,var(--accent) 4%,transparent);">ЄП (наростаючим)</th>
+          <th style="text-align:right;background:color-mix(in oklch,var(--accent) 4%,transparent);">ВЗ (наростаючим)</th>
+          <th style="text-align:right;background:color-mix(in oklch,var(--accent) 4%,transparent);font-weight:700;">Разом (наростаючим)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in yr_rows %}
+        {% set is_full_year = row.period_no == 4 %}
+        <tr style="{% if is_full_year %}font-weight:600;border-top:2px solid var(--border);{% endif %}">
+          <td>
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <!-- Quarter dot -->
+              <span style="
+                display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
+                background:{% if row.period_no == 1 %}var(--accent){% elif row.period_no == 2 %}var(--success){% elif row.period_no == 3 %}var(--warning){% else %}var(--danger){% endif %};
+              "></span>
+              {{ row.label }}
+            </span>
+          </td>
+
+          <!-- Quarter income -->
+          <td style="text-align:right;font-family:var(--font-mono);">
+            {% if row.quarter_income > 0 %}
+              ₴{{ fmt_money(row.quarter_income) }}
+            {% else %}
+              <span style="color:var(--text-mute);">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Cumulative income (highlighted) -->
+          <td style="text-align:right;font-family:var(--font-mono);font-weight:{% if is_full_year %}700{% else %}500{% endif %};background:color-mix(in oklch,var(--accent) 4%,transparent);">
+            {% if row.cumulative_income > 0 %}
+              ₴{{ fmt_money(row.cumulative_income) }}
+            {% else %}
+              <span style="color:var(--text-mute);">—</span>
+            {% endif %}
+          </td>
+
+          <!-- EP quarter -->
+          <td style="text-align:right;font-family:var(--font-mono);color:var(--accent);">
+            {% if row.ep_quarter > 0 %}₴{{ fmt_money(row.ep_quarter) }}{% else %}<span style="color:var(--text-mute);">—</span>{% endif %}
+          </td>
+
+          <!-- VZ quarter -->
+          <td style="text-align:right;font-family:var(--font-mono);color:var(--warning);">
+            {% if row.vz_quarter > 0 %}₴{{ fmt_money(row.vz_quarter) }}{% else %}<span style="color:var(--text-mute);">—</span>{% endif %}
+          </td>
+
+          <!-- Total tax quarter -->
+          <td style="text-align:right;font-family:var(--font-mono);">
+            {% if row.total_tax_quarter > 0 %}₴{{ fmt_money(row.total_tax_quarter) }}{% else %}<span style="color:var(--text-mute);">—</span>{% endif %}
+          </td>
+
+          <!-- EP cumulative -->
+          <td style="text-align:right;font-family:var(--font-mono);color:var(--accent);background:color-mix(in oklch,var(--accent) 4%,transparent);">
+            {% if row.ep_cumulative > 0 %}₴{{ fmt_money(row.ep_cumulative) }}{% else %}<span style="color:var(--text-mute);">—</span>{% endif %}
+          </td>
+
+          <!-- VZ cumulative -->
+          <td style="text-align:right;font-family:var(--font-mono);color:var(--warning);background:color-mix(in oklch,var(--accent) 4%,transparent);">
+            {% if row.vz_cumulative > 0 %}₴{{ fmt_money(row.vz_cumulative) }}{% else %}<span style="color:var(--text-mute);">—</span>{% endif %}
+          </td>
+
+          <!-- Total cumulative (for declaration) -->
+          <td style="text-align:right;font-family:var(--font-mono);font-weight:700;background:color-mix(in oklch,var(--accent) 4%,transparent);color:{% if is_full_year %}var(--danger){% else %}var(--text){% endif %};">
+            {% if row.total_tax_cumulative > 0 %}₴{{ fmt_money(row.total_tax_cumulative) }}{% else %}<span style="color:var(--text-mute);">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Disclaimer -->
+  <div style="margin-top:12px;font-size:11.5px;color:var(--text-mute);display:flex;gap:16px;flex-wrap:wrap;">
+    <span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      Джерело: оплачені рахунки (рахунки → статус "Оплачено") + Оплати додатку
+    </span>
+    <span>Ставки: ЄП {{ "%.0f"|format(ep_rate*100) }}%, ВЗ {{ "%.0f"|format(vz_rate*100) }}%</span>
+    <span>Наростаючим = кумулятивно з початку року</span>
+  </div>
+
+  <!-- Quarterly income breakdown mini-section -->
+  <div style="margin-top:20px;">
+    <div style="font-size:13px;font-weight:600;color:var(--text-mute);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Надходження по кварталах — {{ year }}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      {% set q_colors = ['var(--accent)', 'var(--success)', 'var(--warning)', 'var(--danger)'] %}
+      {% for row in yr_rows %}
+      <div class="card" style="padding:12px 16px;flex:1;min-width:140px;border-left:3px solid {{ q_colors[loop.index0] }};">
+        <div style="font-size:11px;color:var(--text-mute);margin-bottom:2px;">{{ row.label }}</div>
+        <div style="font-size:16px;font-weight:700;font-family:var(--font-mono);">
+          {% if row.quarter_income > 0 %}₴{{ fmt_money(row.quarter_income) }}{% else %}<span style="color:var(--text-mute);">₴0</span>{% endif %}
+        </div>
+        <div style="font-size:11px;color:var(--text-mute);margin-top:2px;">
+          податок ≈ ₴{{ fmt_money(row.total_tax_quarter) }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchYear(year) {
+  // Hide all panels
+  document.querySelectorAll('[id^="panel-"]').forEach(el => el.style.display = 'none');
+  // Deactivate all tabs
+  document.querySelectorAll('#year-tabs .btn').forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost');
+  });
+  // Show selected
+  const panel = document.getElementById('panel-' + year);
+  if (panel) panel.style.display = '';
+  const tab = document.getElementById('tab-' + year);
+  if (tab) {
+    tab.classList.remove('btn-ghost');
+    tab.classList.add('btn-primary');
+  }
+}
+</script>
+{% endblock %}

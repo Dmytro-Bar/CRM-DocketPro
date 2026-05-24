@@ -34,7 +34,7 @@ def _pdf_url(abs_path: str) -> str:
     return f"/docs/{rel}"
 
 # --- Routers ---
-from routers import dashboard, clients, contracts, invoices, acts, expenses, payments, app_payments, doc_templates, lyqpay
+from routers import dashboard, clients, contracts, invoices, acts, expenses, payments, app_payments, doc_templates, lyqpay, taxes
 
 BASE_DIR   = Path(__file__).parent
 PARENT_DIR = BASE_DIR.parent
@@ -99,3 +99,4 @@ app.include_router(payments.router)
 app.include_router(app_payments.router)
 app.include_router(lyqpay.router)
 app.include_router(doc_templates.router)
+app.include_router(taxes.router)
