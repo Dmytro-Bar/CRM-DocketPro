@@ -36,10 +36,11 @@
         <div class="brand-text">DocketPro</div>
         <div class="brand-sub">CRM</div>
       </div>
-      <button class="sidebar-collapse-btn" id="sidebar-toggle-btn"
+      <button type="button" class="sidebar-collapse-btn" id="sidebar-toggle-btn"
               onclick="toggleSidebar()" title="Згорнути панель">
         <svg id="sidebar-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             style="transition:transform 0.2s">
           <path d="M15 18l-6-6 6-6"/>
         </svg>
       </button>
@@ -112,10 +113,20 @@
     </a>
 
     <a href="/app-payments" class="nav-item {% if current.startswith('/app-payments') %}active{% endif %}">
-      <!-- IconExpenses (repurposed for LiqPay) -->
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="5" width="20" height="14" rx="2"/>
         <path d="M2 10h20"/>
+      </svg>
+      <span>Оплати</span>
+    </a>
+
+    <a href="/lyqpay" class="nav-item {% if current.startswith('/lyqpay') %}active{% endif %}">
+      <!-- IconLiqPay: credit card with signal -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2" y="7" width="20" height="13" rx="2"/>
+        <path d="M2 11h20"/>
+        <path d="M17 4c1.5.5 2.5 1.5 3 3"/>
+        <path d="M14 3.5c2.5.7 4.5 2.7 5 5.5"/>
       </svg>
       <span>LiqPay</span>
     </a>
@@ -283,22 +294,75 @@ function toggleSidebar() {
   const icon = document.getElementById('sidebar-toggle-icon');
   const collapsed = app.classList.toggle('sidebar-collapsed');
   localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
-  if (icon) {
-    icon.innerHTML = collapsed
-      ? '<path d="M9 18l6-6-6-6"/>'   // → expand arrow
-      : '<path d="M15 18l-6-6 6-6"/>'; // ← collapse arrow
-  }
+  if (icon) icon.style.transform = collapsed ? 'rotate(180deg)' : '';
 }
 // Restore on load
-(function() {
+document.addEventListener('DOMContentLoaded', function() {
   if (localStorage.getItem('sidebar-collapsed') === '1') {
     document.querySelector('.app').classList.add('sidebar-collapsed');
-    document.addEventListener('DOMContentLoaded', () => {
-      const icon = document.getElementById('sidebar-toggle-icon');
-      if (icon) icon.innerHTML = '<path d="M9 18l6-6-6-6"/>';
-    });
+    const icon = document.getElementById('sidebar-toggle-icon');
+    if (icon) icon.style.transform = 'rotate(180deg)';
   }
-})();
+});
+
+// ── Sortable tables ──────────────────────────────────────────
+function initSortable(tableId) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl) return;
+  const ths = tbl.querySelectorAll('thead th');
+  let activeTh = null, asc = false;
+
+  ths.forEach((th, ci) => {
+    if (th.hasAttribute('data-nosort')) return;
+    th.style.cursor = 'pointer';
+    th.style.userSelect = 'none';
+    const ind = document.createElement('span');
+    ind.className = 'th-si';
+    ind.innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.3;margin-left:3px;vertical-align:middle"><path d="M7 16V8m0 0l-4 4m4-4l4 4M17 8v8m0 0l-4-4m4 4l4-4"/></svg>';
+    th.appendChild(ind);
+
+    th.addEventListener('click', () => {
+      if (activeTh === th) { asc = !asc; }
+      else {
+        if (activeTh) {
+          activeTh.querySelector('.th-si').innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.3;margin-left:3px;vertical-align:middle"><path d="M7 16V8m0 0l-4 4m4-4l4 4M17 8v8m0 0l-4-4m4 4l4-4"/></svg>';
+          activeTh.style.color = '';
+        }
+        activeTh = th; asc = false;
+      }
+      th.style.color = 'var(--accent-fg)';
+      ind.innerHTML = asc
+        ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--accent-fg)" stroke-width="2.5" style="margin-left:3px;vertical-align:middle"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
+        : '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--accent-fg)" stroke-width="2.5" style="margin-left:3px;vertical-align:middle"><path d="M12 5v14M5 12l7 7 7-7"/></svg>';
+
+      const tbody = tbl.querySelector('tbody');
+      const rows = [...tbody.querySelectorAll('tr')];
+      rows.sort((a, b) => {
+        const av = _sv(a.cells[ci]), bv = _sv(b.cells[ci]);
+        return asc ? _sc(av, bv) : _sc(bv, av);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    });
+  });
+}
+
+function _sv(cell) {
+  if (!cell) return '';
+  return cell.dataset.sort || cell.textContent.trim();
+}
+
+function _sc(a, b) {
+  // Date dd.mm.yyyy
+  const dm = /^(\d{2})\.(\d{2})\.(\d{4})/;
+  const am = a.match(dm), bm = b.match(dm);
+  if (am && bm)
+    return new Date(+am[3], +am[2]-1, +am[1]) - new Date(+bm[3], +bm[2]-1, +bm[1]);
+  // Number (strip ₴ spaces, Ukrainian decimal comma)
+  const an = parseFloat(a.replace(/[^\d,.-]/g, '').replace(',', '.'));
+  const bn = parseFloat(b.replace(/[^\d,.-]/g, '').replace(',', '.'));
+  if (!isNaN(an) && !isNaN(bn)) return an - bn;
+  return a.localeCompare(b, 'uk');
+}
 
 // ── Bulk select ──────────────────────────────────────────────
 function initBulkSelect(tableId) {

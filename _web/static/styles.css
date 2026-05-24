@@ -167,10 +167,8 @@ body {
 
 /* ── App shell ─────────────────────────────────────────────── */
 .app {
-  display: grid;
-  grid-template-columns: 232px 1fr;
+  display: flex;
   min-height: 100vh;
-  transition: grid-template-columns 0.22s ease;
 }
 
 /* ── Sidebar collapse ─────────────────────────────────────── */
@@ -182,7 +180,7 @@ body {
   background: transparent;
   cursor: pointer;
   color: var(--text-mute);
-  padding: 3px 4px;
+  padding: 3px 5px;
   border-radius: 5px;
   display: flex;
   align-items: center;
@@ -192,21 +190,27 @@ body {
 .sidebar-collapse-btn:hover { color: var(--text); background: var(--bg-soft); }
 
 /* Collapsed state */
-.app.sidebar-collapsed { grid-template-columns: 54px 1fr; }
-.app.sidebar-collapsed .sidebar { padding: 18px 6px; overflow: hidden; }
+.app.sidebar-collapsed .sidebar {
+  width: 54px !important;
+  min-width: 54px;
+  padding: 18px 4px;
+}
 .app.sidebar-collapsed .brand { padding: 6px 0 18px; justify-content: center; gap: 0; }
 .app.sidebar-collapsed .brand-label,
+.app.sidebar-collapsed .brand-mark,
 .app.sidebar-collapsed .nav-item span,
 .app.sidebar-collapsed .nav-section,
 .app.sidebar-collapsed .badge-count,
 .app.sidebar-collapsed .user-card > div:last-child { display: none; }
-.app.sidebar-collapsed .brand-mark { margin: 0 auto; }
 .app.sidebar-collapsed .nav-item { justify-content: center; padding: 9px 0; }
 .app.sidebar-collapsed .user-card { justify-content: center; padding: 10px 0 4px; }
 .app.sidebar-collapsed .sidebar-collapse-btn { margin: 0 auto; }
 
 /* Sidebar */
 .sidebar {
+  width: 232px;
+  min-width: 232px;
+  flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: 18px 14px;
@@ -216,7 +220,10 @@ body {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow: hidden;
+  transition: width 0.22s ease, min-width 0.22s ease, padding 0.22s ease;
 }
+.main { flex: 1; min-width: 0; }
 .brand {
   display: flex;
   align-items: center;
@@ -304,7 +311,7 @@ body {
 }
 
 /* Main area */
-.main { padding: 22px 28px 60px; min-width: 0; }
+.main { padding: 22px 28px 60px; }
 
 /* Topbar */
 .topbar {

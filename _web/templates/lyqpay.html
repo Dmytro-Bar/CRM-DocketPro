@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}LiqPay — DocketPro CRM{% endblock %}
+
+{% block page_title %}LiqPay{% endblock %}
+{% block page_sub %}Платежі напряму з LiqPay API{% endblock %}
+
+{% block content %}
+
+<div class="page-card">
+
+  {# ── Filter form ─────────────────────────────────────────────── #}
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface-2)">
+    <form method="post" action="/lyqpay/fetch">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--text-mute);font-weight:500">Період:</span>
+        <input type="text" name="date_from" value="{{ date_from }}" placeholder="дд.мм.рррр"
+               style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;
+                      font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);
+                      outline:none;width:110px"/>
+        <span style="color:var(--text-mute)">—</span>
+        <input type="text" name="date_to" value="{{ date_to }}" placeholder="дд.мм.рррр"
+               style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;
+                      font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);
+                      outline:none;width:110px"/>
+        <button type="submit" class="btn btn-primary" {% if not configured %}disabled title="Налаштуйте LIQPAY_PUBLIC_KEY та LIQPAY_PRIVATE_KEY у .env"{% endif %}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+            <path d="M16 16h5v5"/>
+          </svg>
+          Завантажити з LiqPay
+        </button>
+        {% if loaded %}
+        <span style="font-size:12px;color:var(--text-mute);margin-left:4px">
+          {{ payments|length }} транзакцій
+        </span>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  {# ── Not configured warning ──────────────────────────────────── #}
+  {% if not configured %}
+  <div style="margin:24px;padding:16px 20px;border:1px solid var(--warning);border-radius:var(--radius);
+              background:color-mix(in oklch,var(--warning) 8%,transparent);
+              display:flex;align-items:flex-start;gap:12px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+      <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </svg>
+    <div>
+      <div style="font-weight:600;color:var(--text);margin-bottom:4px">LiqPay API не налаштовано</div>
+      <div style="font-size:13px;color:var(--text-soft)">
+        Додайте у файл <code style="font-family:var(--font-mono);background:var(--surface-2);padding:1px 5px;border-radius:3px">.env</code>:<br>
+        <code style="font-family:var(--font-mono);font-size:12px">LIQPAY_PUBLIC_KEY=...</code><br>
+        <code style="font-family:var(--font-mono);font-size:12px">LIQPAY_PRIVATE_KEY=...</code>
+      </div>
+    </div>
+  </div>
+
+  {# ── Error ───────────────────────────────────────────────────── #}
+  {% elif error %}
+  <div style="margin:24px;padding:16px 20px;border:1px solid var(--danger);border-radius:var(--radius);
+              background:color-mix(in oklch,var(--danger) 8%,transparent);
+              display:flex;align-items:flex-start;gap:12px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+      <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </svg>
+    <div>
+      <div style="font-weight:600;color:var(--text);margin-bottom:4px">Помилка LiqPay API</div>
+      <div style="font-size:13px;color:var(--text-soft)">{{ error }}</div>
+    </div>
+  </div>
+
+  {# ── Summary + table ─────────────────────────────────────────── #}
+  {% elif loaded %}
+
+  <div class="summary-bar">
+    <div class="s-item">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)">
+        <path d="M4 12l5 5L20 6"/>
+      </svg>
+      Надійшло: <span class="s-val success">₴{{ fmt_money(total) }}</span>
+    </div>
+    <div class="s-item">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-mute)">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+      </svg>
+      Комісія LiqPay: <span class="s-val" style="color:var(--text-mute)">₴{{ fmt_money(commission) }}</span>
+    </div>
+    <div class="s-item" style="margin-left:auto">
+      Чисто: <span class="s-val" style="color:var(--text);font-weight:600">
+        ₴{{ fmt_money(total - commission) }}
+      </span>
+    </div>
+  </div>
+
+  {% if payments %}
+  <table class="tbl" id="lq-table">
+    <thead>
+      <tr>
+        <th style="width:95px">Дата</th>
+        <th style="width:115px;text-align:center">Статус</th>
+        <th>Платник</th>
+        <th style="width:135px">Телефон / Картка</th>
+        <th style="width:115px">Спосіб оплати</th>
+        <th style="width:115px">Призначення</th>
+        <th class="num" style="width:120px">Сума</th>
+        <th class="num" style="width:100px">Комісія</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in payments %}
+    {% set lbl, cls = status_label(p.status) %}
+    <tr class="clickable" onclick="openLqDrawer(this)"
+        data-lq='{{ {
+          "payment_id":  p.payment_id,
+          "date_str":    p.date_str,
+          "amount":      p.amount,
+          "commission":  p.commission,
+          "currency":    p.currency,
+          "status":      p.status,
+          "status_lbl":  lbl,
+          "status_cls":  cls,
+          "payer_name":  p.payer_name,
+          "payer_phone":   p.payer_phone,
+          "payer_card":   p.payer_card,
+          "paytype":      p.paytype,
+          "paytype_label": p.paytype_label,
+          "description":  p.description,
+          "order_id":     p.order_id,
+          "action":       p.action
+        } | tojson }}'>
+      <td style="font-size:12px;color:var(--text-mute);white-space:nowrap">{{ p.date_str }}</td>
+      <td style="text-align:center">
+        <span class="pill {{ cls }}" style="font-size:11px">{{ lbl }}</span>
+      </td>
+      <td style="font-weight:500;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        {{ p.payer_name or '—' }}
+      </td>
+      <td style="font-size:12px;color:var(--text-soft)">
+        {% if p.payer_phone %}
+          <a href="tel:{{ p.payer_phone }}" style="color:var(--accent-fg);text-decoration:none"
+             onclick="event.stopPropagation()">{{ p.payer_phone }}</a>
+        {% elif p.payer_card %}
+          <span style="font-family:var(--font-mono)">{{ p.payer_card }}</span>
+        {% else %}
+          <span style="color:var(--text-mute)">—</span>
+        {% endif %}
+      </td>
+      <td style="font-size:12px;color:var(--text-soft);white-space:nowrap">
+        {{ p.paytype_label or '—' }}
+      </td>
+      <td style="font-size:12px;color:var(--text-soft);max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        {{ p.description or p.order_id or '—' }}
+      </td>
+      <td class="num" style="font-weight:600">₴{{ fmt_money(p.amount) }}</td>
+      <td class="num" style="color:var(--text-mute);font-size:12px">
+        {% if p.commission %}₴{{ fmt_money(p.commission) }}{% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <span class="pg-info">Транзакцій: {{ payments|length }}</span>
+  </div>
+
+  {% else %}
+
+  {# Debug block — shows raw API responses when no payments found #}
+  {% if debug %}
+  <div style="margin:16px 20px">
+    <details>
+      <summary style="font-size:12px;color:var(--text-mute);cursor:pointer;user-select:none">
+        Відповідь API (діагностика)
+      </summary>
+      <pre style="margin-top:8px;padding:12px;background:var(--surface-2);border:1px solid var(--border);
+                  border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);
+                  overflow-x:auto;white-space:pre-wrap;color:var(--text-soft)">{% for line in debug %}{{ line }}
+{% endfor %}</pre>
+    </details>
+  </div>
+  {% endif %}
+
+  <div class="empty" style="padding:56px">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"
+         stroke-linecap="round" stroke-linejoin="round"
+         style="color:var(--border-strong);margin:0 auto 12px;display:block">
+      <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+    </svg>
+    Транзакцій за вказаний період не знайдено
+  </div>
+  {% endif %}
+
+  {# ── Initial state ───────────────────────────────────────────── #}
+  {% else %}
+  <div class="empty" style="padding:64px">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"
+         stroke-linecap="round" stroke-linejoin="round"
+         style="color:var(--border-strong);margin:0 auto 14px;display:block">
+      <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+    </svg>
+    <div style="font-size:14px;color:var(--text-mute);margin-bottom:6px">Оберіть період і натисніть «Завантажити з LiqPay»</div>
+    <div style="font-size:12px;color:var(--text-mute)">Дані завантажуються напряму з LiqPay API в реальному часі</div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# ── Payment detail drawer ───────────────────────────────────────── #}
+<div class="drawer" id="lq-drawer">
+  <div class="drawer-header">
+    <h2 id="lq-drw-title" style="font-size:14px">Деталі платежу</h2>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div id="lq-drw-status-row" style="margin-bottom:16px"></div>
+    <div class="info-list">
+      <div class="info-row"><span class="key">Payment ID</span><span class="val mono" id="lq-drw-id" style="font-family:var(--font-mono);font-size:12px"></span></div>
+      <div class="info-row"><span class="key">Дата</span><span class="val" id="lq-drw-date"></span></div>
+      <div class="info-row"><span class="key">Платник</span><span class="val" id="lq-drw-name" style="font-weight:600"></span></div>
+      <div class="info-row" id="lq-phone-row" style="display:none">
+        <span class="key">Телефон</span>
+        <span id="lq-drw-phone"></span>
+      </div>
+      <div class="info-row" id="lq-card-row" style="display:none">
+        <span class="key">Картка</span>
+        <span class="val mono" id="lq-drw-card" style="font-family:var(--font-mono)"></span>
+      </div>
+      <div class="info-row" id="lq-desc-row" style="display:none">
+        <span class="key">Призначення</span>
+        <span class="val" id="lq-drw-desc" style="font-size:12.5px"></span>
+      </div>
+      <div class="info-row" id="lq-order-row" style="display:none">
+        <span class="key">Order ID</span>
+        <span class="val mono" id="lq-drw-order" style="font-family:var(--font-mono);font-size:12px"></span>
+      </div>
+      <div class="info-row"><span class="key">Тип операції</span><span class="val" id="lq-drw-action"></span></div>
+      <div class="info-row"><span class="key">Сума</span><span class="val" id="lq-drw-amount" style="font-size:16px;font-weight:700;font-family:var(--font-mono)"></span></div>
+      <div class="info-row" id="lq-comm-row" style="display:none">
+        <span class="key">Комісія</span>
+        <span class="val" id="lq-drw-commission" style="color:var(--text-mute)"></span>
+      </div>
+      <div class="info-row" id="lq-net-row" style="display:none">
+        <span class="key">Чисто</span>
+        <span class="val" id="lq-drw-net" style="font-weight:600;color:var(--success-fg)"></span>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-ghost" onclick="closeDrawer()">Закрити</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fmtM(n) {
+  return '₴ ' + parseFloat(n).toLocaleString('uk-UA', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function openLqDrawer(row) {
+  const d = JSON.parse(row.dataset.lq);
+
+  document.getElementById('lq-drw-title').textContent = 'Платіж ' + (d.payment_id || '');
+  document.getElementById('lq-drw-id').textContent    = d.payment_id || '—';
+  document.getElementById('lq-drw-date').textContent  = d.date_str   || '—';
+  document.getElementById('lq-drw-name').textContent  = d.payer_name || '—';
+  document.getElementById('lq-drw-action').textContent = d.action     || '—';
+
+  // Status pill
+  document.getElementById('lq-drw-status-row').innerHTML =
+    '<span class="pill ' + d.status_cls + '">' + d.status_lbl + '</span>';
+
+  // Phone
+  const phoneRow = document.getElementById('lq-phone-row');
+  if (d.payer_phone) {
+    document.getElementById('lq-drw-phone').innerHTML =
+      '<a href="tel:' + d.payer_phone + '" style="color:var(--accent-fg)">' + d.payer_phone + '</a>';
+    phoneRow.style.display = '';
+  } else { phoneRow.style.display = 'none'; }
+
+  // Card
+  const cardRow = document.getElementById('lq-card-row');
+  if (d.payer_card) {
+    document.getElementById('lq-drw-card').textContent = d.payer_card;
+    cardRow.style.display = '';
+  } else { cardRow.style.display = 'none'; }
+
+  // Description
+  const descRow = document.getElementById('lq-desc-row');
+  if (d.description) {
+    document.getElementById('lq-drw-desc').textContent = d.description;
+    descRow.style.display = '';
+  } else { descRow.style.display = 'none'; }
+
+  // Order ID
+  const orderRow = document.getElementById('lq-order-row');
+  if (d.order_id) {
+    document.getElementById('lq-drw-order').textContent = d.order_id;
+    orderRow.style.display = '';
+  } else { orderRow.style.display = 'none'; }
+
+  // Amounts
+  document.getElementById('lq-drw-amount').textContent = fmtM(d.amount);
+  const commRow = document.getElementById('lq-comm-row');
+  const netRow  = document.getElementById('lq-net-row');
+  if (d.commission) {
+    document.getElementById('lq-drw-commission').textContent = fmtM(d.commission);
+    document.getElementById('lq-drw-net').textContent = fmtM(d.amount - d.commission);
+    commRow.style.display = '';
+    netRow.style.display  = '';
+  } else {
+    commRow.style.display = 'none';
+    netRow.style.display  = 'none';
+  }
+
+  openDrawer('lq-drawer');
+}
+initSortable('lq-table');
+</script>
+{% endblock %}

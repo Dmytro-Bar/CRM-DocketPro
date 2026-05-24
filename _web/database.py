@@ -97,7 +97,20 @@ CREATE TABLE IF NOT EXISTS app_payments (
     description TEXT,
     source      TEXT
 );
+
+CREATE TABLE IF NOT EXISTS expense_categories (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL
+);
 """
+
+_DEFAULT_EXPENSE_CATEGORIES = [
+    "Дизайн",
+    "Юридичні витрати",
+    "Технічна підтримка",
+    "Розробка програмного забезпечення",
+    "Реклама та маркетинг",
+]
 
 
 def init_db():
@@ -115,6 +128,13 @@ def init_db():
                 conn.execute(ddl)
             except Exception:
                 pass
+        # Seed default expense categories if the table is empty
+        count = conn.execute("SELECT COUNT(*) FROM expense_categories").fetchone()[0]
+        if count == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO expense_categories (name) VALUES (?)",
+                [(c,) for c in _DEFAULT_EXPENSE_CATEGORIES],
+            )
 
 
 @contextmanager

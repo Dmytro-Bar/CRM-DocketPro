@@ -1,6 +1,7 @@
 """Clients CRUD router."""
 
 from typing import Optional
+from urllib.parse import quote
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -56,7 +57,7 @@ async def export_clients(q: str = Query(default="")):
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
 
 

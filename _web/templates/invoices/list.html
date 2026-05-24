@@ -128,7 +128,7 @@
   <table class="tbl" id="inv-table">
     <thead>
       <tr>
-        <th style="width:36px"><input type="checkbox" id="check-all" onchange="toggleAll(this)"/></th>
+        <th style="width:36px" data-nosort><input type="checkbox" id="check-all" onchange="toggleAll(this)"/></th>
         <th style="width:175px">Рахунок №</th>
         <th>Клієнт</th>
         <th style="width:95px">Дата</th>
@@ -136,7 +136,7 @@
         <th class="num" style="width:130px">Сума, грн</th>
         <th style="width:105px;text-align:center">Строк</th>
         <th style="width:115px;text-align:center">Статус</th>
-        <th style="width:140px;text-align:right">Дії</th>
+        <th style="width:140px;text-align:right" data-nosort>Дії</th>
       </tr>
     </thead>
     <tbody data-filterable>
@@ -158,6 +158,7 @@
           "period_to":     r.period_to or "",
           "sum":           r.sum_uah,
           "due":           r.due_date or "",
+          "pay_date":      r.pay_date or "",
           "status":        item.status,
           "overdue":       item.overdue,
           "overdue_days":  item.overdue_days,
@@ -191,6 +192,9 @@
       </td>
       <td style="text-align:center">
         {{ status_pill(item) }}
+        {% if item.status == 'Оплачено' and r.pay_date %}
+        <div style="font-size:10px;color:var(--text-mute);margin-top:2px">{{ r.pay_date }}</div>
+        {% endif %}
         {% if item.reminder_date %}
         <div style="margin-top:3px;font-size:10px;color:var(--text-mute);
                     display:flex;align-items:center;justify-content:center;gap:3px">
@@ -303,6 +307,10 @@
       <div class="info-row"><span class="key">Строк оплати</span><span class="val" id="drw-due"></span></div>
       <div class="info-row"><span class="key">Сума</span><span class="val" id="drw-sum" style="font-size:15px;font-weight:600;font-family:var(--font-mono)"></span></div>
       <div class="info-row"><span class="key">Статус</span><span id="drw-status"></span></div>
+      <div class="info-row" id="drw-paydate-row" style="display:none">
+        <span class="key">Дата оплати</span>
+        <span class="val" id="drw-paydate-val" style="font-weight:600;color:var(--success-fg)"></span>
+      </div>
       <div class="info-row" id="drw-reminder-row" style="display:none">
         <span class="key">Нагадування</span>
         <span class="val" id="drw-reminder-val"></span>
@@ -380,10 +388,11 @@
   </div>
 
   <div class="drawer-footer">
-    <span id="drw-mark-paid-wrap">
-      <form method="post" id="drw-mark-paid-form">
-        <input type="hidden" name="pay_date" value="{{ today.strftime('%d.%m.%Y') }}"/>
-        <button type="submit" class="btn btn-primary">✓ Позначити оплаченим</button>
+    <span id="drw-mark-paid-wrap" style="display:contents">
+      <form method="post" id="drw-mark-paid-form" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="date" name="pay_date" id="drw-pay-date-input"
+               style="font-size:12px;border:1px solid var(--border);border-radius:var(--radius);padding:4px 6px;color:var(--text);background:var(--surface);width:132px"/>
+        <button type="submit" class="btn btn-primary" style="white-space:nowrap">✓ Оплачено</button>
       </form>
     </span>
     <a id="drw-edit-link" href="#" class="btn btn-secondary">Редагувати</a>
@@ -450,14 +459,30 @@ function openInvDrawer(row) {
     if (signNoPdf)  signNoPdf.style.display = '';
   }
 
+  // Pay date info row (show when paid)
+  const paydateRow = document.getElementById('drw-paydate-row');
+  const paydateVal = document.getElementById('drw-paydate-val');
+  if (d.status === 'Оплачено' && d.pay_date) {
+    paydateVal.textContent = d.pay_date;
+    paydateRow.style.display = '';
+  } else {
+    paydateRow.style.display = 'none';
+  }
+
   // Actions
   document.getElementById('drw-edit-link').href = '/invoices/' + d.no + '/edit';
   const mpWrap = document.getElementById('drw-mark-paid-wrap');
   const mpForm = document.getElementById('drw-mark-paid-form');
+  const dateInput = document.getElementById('drw-pay-date-input');
   const isActive = (d.status !== 'Оплачено' && d.status !== 'Скасовано');
   if (isActive) {
-    mpWrap.style.display = '';
+    mpWrap.style.display = 'contents';
     mpForm.action = '/invoices/' + d.no + '/mark-paid';
+    // Default date input to today
+    if (dateInput) {
+      const now = new Date();
+      dateInput.value = now.toISOString().slice(0, 10);
+    }
   } else {
     mpWrap.style.display = 'none';
   }
@@ -569,5 +594,6 @@ document.addEventListener('DOMContentLoaded', () => {
     history.replaceState({}, '', location.pathname + (location.search.replace(/[?&]toast=[^&]*/g,'').replace(/[?&]to=[^&]*/g,'').replace(/^&/,'?') || ''));
   }
 });
+initSortable('inv-table');
 </script>
 {% endblock %}

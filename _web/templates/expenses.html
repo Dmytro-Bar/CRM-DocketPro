@@ -27,7 +27,13 @@
         <input type="text" name="exp_date" value="{{ today_str }}" placeholder="дд.мм.рррр" required/>
       </div>
       <div class="field">
-        <label>Категорія</label>
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          Категорія
+          <button type="button" onclick="toggleCatPanel()"
+                  style="font-size:11px;color:var(--accent-fg);background:none;border:none;cursor:pointer;padding:0;font-family:inherit">
+            + Нова
+          </button>
+        </label>
         <select name="category" required>
           {% for cat in categories %}
           <option value="{{ cat }}">{{ cat }}</option>
@@ -38,14 +44,12 @@
         <label>Опис</label>
         <input type="text" name="description" placeholder="Короткий опис"/>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 85px;gap:8px">
-        <div class="field">
-          <label>Сума</label>
-          <input type="number" step="0.01" name="amount" required min="0"/>
-        </div>
-        <div class="field">
-          <label>Валюта</label>
-          <select name="currency">
+      <div class="field">
+        <label>Сума і Валюта</label>
+        <div style="display:flex;gap:6px">
+          <input type="number" step="0.01" name="amount" required min="0"
+                 style="flex:1;min-width:0"/>
+          <select name="currency" style="width:68px;flex-shrink:0">
             <option value="грн">грн</option>
             <option value="USD">USD</option>
             <option value="EUR">EUR</option>
@@ -61,6 +65,38 @@
         Додати
       </button>
     </form>
+
+    {# ── Панель управління категоріями ───────────────────────────── #}
+    <div id="cat-panel" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
+        Категорії
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
+        {% for cat in categories %}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:var(--radius);background:var(--surface-2)">
+          <span style="font-size:13px">{{ cat }}</span>
+          <form method="post" action="/expenses/categories/delete"
+                onsubmit="return confirm('Видалити категорію «{{ cat }}»?')">
+            <input type="hidden" name="name" value="{{ cat }}"/>
+            <button type="submit" class="btn btn-sm btn-ghost"
+                    style="color:var(--danger-fg);padding:2px 5px" title="Видалити">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <form method="post" action="/expenses/categories/add"
+            style="display:flex;gap:6px">
+        <input type="text" name="name" placeholder="Нова категорія" required
+               style="flex:1;min-width:0;border:1px solid var(--border);border-radius:var(--radius);
+                      padding:6px 10px;font-size:13px;font-family:inherit;color:var(--text);
+                      background:var(--surface);outline:none"/>
+        <button type="submit" class="btn btn-secondary btn-sm" style="flex-shrink:0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </form>
+    </div>
   </div>
 
   {# ── Список ──────────────────────────────────────────────────── #}
@@ -92,24 +128,44 @@
       </div>
 
       {% if expenses %}
-      <table class="tbl">
+      <table class="tbl" id="expenses-table">
         <thead>
           <tr>
             <th style="width:100px">Дата</th>
-            <th style="width:180px">Категорія</th>
+            <th style="width:175px">Категорія</th>
             <th>Опис</th>
-            <th class="num" style="width:130px">Сума, грн</th>
-            <th style="width:44px"></th>
+            <th class="num" style="width:160px">Сума</th>
+            <th style="width:44px" data-nosort></th>
           </tr>
         </thead>
         <tbody>
         {% for e in expenses %}
-        <tr>
+        <tr class="clickable" onclick="openExpDrawer(this)"
+            data-exp='{{ {
+              "id":            e.id,
+              "exp_date":      e.exp_date or "",
+              "category":      e.category or "",
+              "description":   e.description or "",
+              "amount":        e.amount,
+              "currency":      e.currency or "грн",
+              "exchange_rate": e.exchange_rate or 1,
+              "amount_uah":    e.amount_uah
+            } | tojson }}'>
           <td style="font-size:12px;color:var(--text-mute);white-space:nowrap">{{ e.exp_date }}</td>
           <td><span class="pill pill-mute" style="font-size:10.5px">{{ e.category }}</span></td>
           <td style="color:var(--text-soft);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">{{ e.description or '—' }}</td>
-          <td class="num">₴{{ fmt_money(e.amount_uah) }}</td>
-          <td>
+          <td class="num" data-sort="{{ e.amount_uah }}">
+            <span style="font-weight:600">₴{{ fmt_money(e.amount_uah) }}</span>
+            {% if e.currency and e.currency != 'грн' %}
+            <div style="font-size:10.5px;color:var(--text-mute);font-weight:400;margin-top:1px">
+              {{ "%.2f"|format(e.amount) }} {{ e.currency }}
+              {% if e.exchange_rate and e.exchange_rate != 1 %}
+              × {{ "%.2f"|format(e.exchange_rate) }}
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
+          <td onclick="event.stopPropagation()">
             <div class="actions">
               <form method="post" action="/expenses/{{ e.id }}/delete"
                     onsubmit="return confirm('Видалити цей запис?')">
@@ -133,4 +189,145 @@
   </div>
 
 </div>
+
+{# ── Edit Expense Drawer ──────────────────────────────────────────── #}
+<div class="drawer" id="exp-edit-drawer">
+  <div class="drawer-header">
+    <h2 style="font-size:14px" id="exp-drw-title">Редагувати витрату</h2>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <form method="post" id="exp-edit-form" style="display:flex;flex-direction:column;gap:14px">
+      <div class="field">
+        <label>Дата</label>
+        <input type="text" name="exp_date" id="ed-date" placeholder="дд.мм.рррр" required/>
+      </div>
+      <div class="field">
+        <label>Категорія</label>
+        <select name="category" id="ed-category" required>
+          {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Опис</label>
+        <input type="text" name="description" id="ed-description" placeholder="Короткий опис"/>
+      </div>
+      <div class="field">
+        <label>Сума і Валюта</label>
+        <div style="display:flex;gap:6px">
+          <input type="number" step="0.01" name="amount" id="ed-amount" required min="0"
+                 style="flex:1;min-width:0" oninput="calcUah()"/>
+          <select name="currency" id="ed-currency" style="width:68px;flex-shrink:0" onchange="toggleRate()">
+            <option value="грн">грн</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" id="ed-rate-row">
+        <label>Курс</label>
+        <input type="number" step="0.01" name="exchange_rate" id="ed-rate" value="1" oninput="calcUah()"/>
+      </div>
+      <div style="padding:10px 12px;border-radius:var(--radius);background:var(--surface-2);
+                  font-size:13px;color:var(--text-mute)" id="ed-uah-preview"></div>
+    </form>
+  </div>
+  <div class="drawer-footer" style="display:flex;justify-content:space-between;align-items:center">
+    <form method="post" id="exp-delete-form" onsubmit="return confirm('Видалити цей запис?')">
+      <button type="submit" class="btn btn-ghost" style="color:var(--danger-fg)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/>
+        </svg>
+        Видалити
+      </button>
+    </form>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" onclick="closeDrawer()">Скасувати</button>
+      <button type="submit" form="exp-edit-form" class="btn btn-primary">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 12l5 5L20 6"/>
+        </svg>
+        Зберегти
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+initSortable('expenses-table');
+
+function toggleCatPanel() {
+  const p = document.getElementById('cat-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+// Auto-open category panel after saving a new category
+if (new URLSearchParams(location.search).get('cat_saved')) {
+  toggleCatPanel();
+  history.replaceState({}, '', location.pathname);
+}
+
+// ── Edit drawer ────────────────────────────────────────────────────
+function openExpDrawer(row) {
+  const d = JSON.parse(row.dataset.exp);
+
+  document.getElementById('exp-drw-title').textContent =
+    d.exp_date ? 'Витрата від ' + d.exp_date : 'Редагувати витрату';
+
+  document.getElementById('ed-date').value        = d.exp_date;
+  document.getElementById('ed-description').value = d.description;
+  document.getElementById('ed-amount').value      = d.amount;
+  document.getElementById('ed-rate').value        = d.exchange_rate || 1;
+
+  // Category select
+  const catSel = document.getElementById('ed-category');
+  for (let o of catSel.options) { o.selected = (o.value === d.category); }
+
+  // Currency select
+  const curSel = document.getElementById('ed-currency');
+  for (let o of curSel.options) { o.selected = (o.value === d.currency); }
+
+  // Set form actions with this record's id
+  document.getElementById('exp-edit-form').action   = '/expenses/' + d.id + '/edit';
+  document.getElementById('exp-delete-form').action = '/expenses/' + d.id + '/delete';
+
+  toggleRate();
+  calcUah();
+  openDrawer('exp-edit-drawer');
+}
+
+function toggleRate() {
+  const cur  = document.getElementById('ed-currency').value;
+  const row  = document.getElementById('ed-rate-row');
+  row.style.display = cur === 'грн' ? 'none' : '';
+}
+
+function calcUah() {
+  const amt  = parseFloat(document.getElementById('ed-amount').value) || 0;
+  const cur  = document.getElementById('ed-currency').value;
+  const rate = parseFloat(document.getElementById('ed-rate').value) || 1;
+  const uah  = cur === 'грн' ? amt : amt * rate;
+  const prev = document.getElementById('ed-uah-preview');
+  if (amt > 0) {
+    prev.style.display = '';
+    if (cur === 'грн') {
+      prev.textContent = '₴ ' + uah.toLocaleString('uk-UA', {minimumFractionDigits:2, maximumFractionDigits:2});
+    } else {
+      prev.textContent = amt.toFixed(2) + ' ' + cur + ' × ' + rate.toFixed(2) +
+        ' = ₴ ' + uah.toLocaleString('uk-UA', {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+  } else {
+    prev.style.display = 'none';
+  }
+}
+</script>
 {% endblock %}

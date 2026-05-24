@@ -2,6 +2,7 @@
 
 import os
 from datetime import date
+from urllib.parse import quote
 from fastapi import APIRouter, Request, Form, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -137,7 +138,7 @@ async def export_acts(
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
 
 

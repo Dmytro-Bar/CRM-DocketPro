@@ -47,7 +47,7 @@
         <th style="width:180px">Директор</th>
         <th style="width:210px">Email</th>
         <th style="width:100px;text-align:center">Статус</th>
-        <th style="width:100px;text-align:right">Дії</th>
+        <th style="width:100px;text-align:right" data-nosort>Дії</th>
       </tr>
     </thead>
     <tbody>
@@ -213,5 +213,6 @@ function liveSearchClients(inp) {
     tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
+initSortable('clients-table');
 </script>
 {% endblock %}

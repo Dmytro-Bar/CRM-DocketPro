@@ -90,7 +90,7 @@
         <th style="width:155px">Рахунок</th>
         <th class="num" style="width:130px">Сума, грн</th>
         <th style="width:155px;text-align:center">Статус</th>
-        <th style="width:160px;text-align:right">Дії</th>
+        <th style="width:160px;text-align:right" data-nosort>Дії</th>
       </tr>
     </thead>
     <tbody data-filterable>
@@ -350,5 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
     history.replaceState({}, '', location.pathname + (location.search.replace(/[?&]toast=[^&]*/g,'').replace(/[?&]to=[^&]*/g,'').replace(/^&/,'?') || ''));
   }
 });
+initSortable('acts-table');
 </script>
 {% endblock %}
