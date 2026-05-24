@@ -67,9 +67,19 @@ def _compute_tax_data() -> dict:
         ).fetchall()
 
         app_payments = db.execute(
-            "SELECT pay_date, amount FROM app_payments "
+            "SELECT pay_date, amount, source FROM app_payments "
             "WHERE pay_date IS NOT NULL AND pay_date != ''"
         ).fetchall()
+
+    # LiqPay deducts 1.5% commission before crediting the account.
+    # For tax purposes we need the gross amount the client actually paid.
+    LYQPAY_COMMISSION = 0.015   # 1.5%
+
+    def _gross(amount: float, source: str) -> float:
+        """Return gross (pre-commission) income for tax purposes."""
+        if (source or "").strip().lower() in ("lyqpay", "liqpay"):
+            return amount / (1 - LYQPAY_COMMISSION)   # e.g. 3181.55 / 0.985 ≈ 3230.00
+        return amount
 
     # year → month (1-12) → total income
     income: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
@@ -82,7 +92,8 @@ def _compute_tax_data() -> dict:
     for row in app_payments:
         d = _parse(row["pay_date"])
         if d:
-            income[d.year][d.month] += float(row["amount"] or 0)
+            gross = _gross(float(row["amount"] or 0), row["source"] or "")
+            income[d.year][d.month] += gross
 
     if not income:
         return {}
