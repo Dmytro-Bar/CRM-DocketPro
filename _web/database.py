@@ -102,6 +102,13 @@ CREATE TABLE IF NOT EXISTS expense_categories (
     id   INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS nbu_rate_cache (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    fetched_ts INTEGER NOT NULL,
+    rate       REAL    NOT NULL,
+    rate_date  TEXT    NOT NULL
+);
 """
 
 _DEFAULT_EXPENSE_CATEGORIES = [
@@ -119,10 +126,12 @@ def init_db():
         conn.executescript(CREATE_TABLES_SQL)
         # Migrations — ADD COLUMN is idempotent via try/except
         for ddl in [
-            "ALTER TABLE invoices ADD COLUMN reminder_date     TEXT",
-            "ALTER TABLE invoices ADD COLUMN reminder_pdf_path TEXT",
-            "ALTER TABLE invoices ADD COLUMN email_sent_date   TEXT",
-            "ALTER TABLE acts     ADD COLUMN email_sent_date   TEXT",
+            "ALTER TABLE invoices   ADD COLUMN reminder_date      TEXT",
+            "ALTER TABLE invoices   ADD COLUMN reminder_pdf_path  TEXT",
+            "ALTER TABLE invoices   ADD COLUMN email_sent_date    TEXT",
+            "ALTER TABLE acts       ADD COLUMN email_sent_date    TEXT",
+            "ALTER TABLE contracts  ADD COLUMN nbu_tracking       INTEGER DEFAULT 0",
+            "ALTER TABLE contracts  ADD COLUMN nbu_threshold_pct  REAL DEFAULT 5.0",
         ]:
             try:
                 conn.execute(ddl)

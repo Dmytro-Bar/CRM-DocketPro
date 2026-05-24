@@ -13,6 +13,7 @@ from urllib.parse import quote
 from database import get_db
 from models import fmt_money, fmt_date, norm, parse_date, make_xlsx, pdf_url
 from config import CONTRACTS_DIR
+import nbu_client
 
 router = APIRouter(prefix="/contracts")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -155,18 +156,25 @@ async def list_contracts(
                           if ctype_r == "Доступ" else 0,
         })
 
+    # NBU alert set — contract numbers currently over threshold
+    nbu_result = nbu_client.compute_alerts([r for r in rows])
+    nbu_alert_nos = {a["contract_no"] for a in nbu_result["alerts"]}
+
     return templates.TemplateResponse("contracts.html", {
-        "request":      request,
-        "contracts":    contracts,
-        "ctype":        ctype,
-        "q":            q,
-        "counts":       counts,
-        "mrr":          mrr,
-        "arr":          mrr * 12,
-        "active_cnt":   active_cnt,
-        "hourly_cnt":   hourly_cnt,
-        "total_debt":   total_debt,
-        "today":        today,
+        "request":       request,
+        "contracts":     contracts,
+        "ctype":         ctype,
+        "q":             q,
+        "counts":        counts,
+        "mrr":           mrr,
+        "arr":           mrr * 12,
+        "active_cnt":    active_cnt,
+        "hourly_cnt":    hourly_cnt,
+        "total_debt":    total_debt,
+        "today":         today,
+        "nbu_alert_nos": nbu_alert_nos,
+        "nbu_rate":      nbu_result["current_rate"],
+        "nbu_rate_date": nbu_result["rate_date"],
     })
 
 
@@ -223,32 +231,35 @@ async def new_contract_form(request: Request):
 
 @router.post("/new")
 async def create_contract(
-    contract_no:   str   = Form(...),
-    edrpou:        str   = Form(...),
-    contract_date: str   = Form(""),
-    contract_end:  str   = Form(""),
-    currency:      str   = Form("UAH"),
-    tariff_fx:     float = Form(0),
-    type_rate:     str   = Form(""),
-    users:         int   = Form(1),
-    status:        str   = Form("Активний"),
-    contract_type: str   = Form("Доступ"),
-    subject:       str   = Form(""),
-    hour_rate:     float = Form(0),
-    nbu_rate:      float = Form(0),
-    act_template:  str   = Form(""),
-    notes:         str   = Form(""),
+    contract_no:        str   = Form(...),
+    edrpou:             str   = Form(...),
+    contract_date:      str   = Form(""),
+    contract_end:       str   = Form(""),
+    currency:           str   = Form("UAH"),
+    tariff_fx:          float = Form(0),
+    type_rate:          str   = Form(""),
+    users:              int   = Form(1),
+    status:             str   = Form("Активний"),
+    contract_type:      str   = Form("Доступ"),
+    subject:            str   = Form(""),
+    hour_rate:          float = Form(0),
+    nbu_rate:           float = Form(0),
+    nbu_tracking:       int   = Form(0),
+    nbu_threshold_pct:  float = Form(5.0),
+    act_template:       str   = Form(""),
+    notes:              str   = Form(""),
 ):
     with get_db() as db:
         client_name = _client_name_for(db, edrpou)
         db.execute(
             "INSERT OR IGNORE INTO contracts "
             "(contract_no,edrpou,client_name,contract_date,contract_end,currency,"
-            "tariff_fx,type_rate,users,status,contract_type,subject,hour_rate,nbu_rate,act_template,notes) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "tariff_fx,type_rate,users,status,contract_type,subject,hour_rate,"
+            "nbu_rate,nbu_tracking,nbu_threshold_pct,act_template,notes) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (contract_no, edrpou, client_name, contract_date, contract_end, currency,
              tariff_fx, type_rate, users, status, contract_type, subject,
-             hour_rate, nbu_rate, act_template, notes[:500])
+             hour_rate, nbu_rate, nbu_tracking, nbu_threshold_pct, act_template, notes[:500])
         )
     return RedirectResponse("/contracts", status_code=303)
 
@@ -288,32 +299,36 @@ async def delete_contract(contract_no: str):
 
 @router.post("/{contract_no}/edit")
 async def update_contract(
-    contract_no:   str,
-    edrpou:        str   = Form(...),
-    contract_date: str   = Form(""),
-    contract_end:  str   = Form(""),
-    currency:      str   = Form("UAH"),
-    tariff_fx:     float = Form(0),
-    type_rate:     str   = Form(""),
-    users:         int   = Form(1),
-    status:        str   = Form("Активний"),
-    contract_type: str   = Form("Доступ"),
-    subject:       str   = Form(""),
-    hour_rate:     float = Form(0),
-    nbu_rate:      float = Form(0),
-    act_template:  str   = Form(""),
-    notes:         str   = Form(""),
+    contract_no:        str,
+    edrpou:             str   = Form(...),
+    contract_date:      str   = Form(""),
+    contract_end:       str   = Form(""),
+    currency:           str   = Form("UAH"),
+    tariff_fx:          float = Form(0),
+    type_rate:          str   = Form(""),
+    users:              int   = Form(1),
+    status:             str   = Form("Активний"),
+    contract_type:      str   = Form("Доступ"),
+    subject:            str   = Form(""),
+    hour_rate:          float = Form(0),
+    nbu_rate:           float = Form(0),
+    nbu_tracking:       int   = Form(0),
+    nbu_threshold_pct:  float = Form(5.0),
+    act_template:       str   = Form(""),
+    notes:              str   = Form(""),
 ):
     with get_db() as db:
         client_name = _client_name_for(db, edrpou)
         db.execute(
             "UPDATE contracts SET edrpou=?,client_name=?,contract_date=?,"
             "contract_end=?,currency=?,tariff_fx=?,type_rate=?,users=?,status=?,"
-            "contract_type=?,subject=?,hour_rate=?,nbu_rate=?,act_template=?,notes=? "
+            "contract_type=?,subject=?,hour_rate=?,nbu_rate=?,nbu_tracking=?,"
+            "nbu_threshold_pct=?,act_template=?,notes=? "
             "WHERE contract_no=?",
             (edrpou, client_name, contract_date, contract_end, currency,
              tariff_fx, type_rate, users, status, contract_type, subject,
-             hour_rate, nbu_rate, act_template, notes[:500], contract_no)
+             hour_rate, nbu_rate, nbu_tracking, nbu_threshold_pct,
+             act_template, notes[:500], contract_no)
         )
     return RedirectResponse("/contracts", status_code=303)
 

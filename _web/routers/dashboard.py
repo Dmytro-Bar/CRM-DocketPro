@@ -14,6 +14,7 @@ from pathlib import Path
 
 from database import get_db
 from models import norm, parse_date, fmt_date, fmt_money, is_cancelled
+import nbu_client
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -629,6 +630,19 @@ async def dashboard(
             active_period = "month"
 
     data = compute_kpi(df, dt, client, ctype)
+
+    # ── NBU rate alerts ────────────────────────────────────────────
+    with get_db() as db:
+        active_contracts = db.execute(
+            "SELECT contract_no, client_name, nbu_rate, nbu_tracking, nbu_threshold_pct "
+            "FROM contracts WHERE status='Активний'"
+        ).fetchall()
+    nbu = nbu_client.compute_alerts(active_contracts)
+    data["nbu_alerts"]       = nbu["alerts"]
+    data["nbu_current_rate"] = nbu["current_rate"]
+    data["nbu_rate_date"]    = nbu["rate_date"]
+    data["nbu_error"]        = nbu["error"]
+
     data["request"]       = request
     data["active_period"] = active_period
     return templates.TemplateResponse("dashboard.html", data)
@@ -658,3 +672,17 @@ async def cancel_act(act_no: str, request: Request):
         '<tr class="hidden"></tr>',
         headers={"HX-Trigger": "dashboardRefresh"}
     )
+
+
+@router.get("/api/nbu-rate")
+async def api_nbu_rate():
+    """Returns current NBU USD/UAH rate (cached or live)."""
+    try:
+        rate, rate_date, from_cache = nbu_client.get_rate()
+        return JSONResponse({
+            "rate":       rate,
+            "date":       rate_date,
+            "from_cache": from_cache,
+        })
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
