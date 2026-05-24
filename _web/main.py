@@ -15,9 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
+import asyncio
 from database import init_db
 from models import fmt_money, fmt_date, norm
 from config import CONTRACTS_DIR as _CONTRACTS_DIR
+import nbu_client as _nbu
 
 def _pdf_url(abs_path: str) -> str:
     """Convert absolute pdf_path stored in DB to a /docs/... web URL."""
@@ -59,8 +61,32 @@ templates.env.globals["pdf_url"]   = _pdf_url
 
 # --- Init DB on startup ---
 @app.on_event("startup")
-def startup():
+async def startup():
     init_db()
+    asyncio.create_task(_nbu_daily_loop())
+
+
+async def _nbu_daily_loop():
+    """Background task: refresh NBU rate once per day (24 h cycle)."""
+    while True:
+        try:
+            _nbu.fetch_from_api()          # force-fetch, bypass cache age
+            _store_fresh_rate()
+        except Exception:
+            pass                           # network down — silently skip
+        await asyncio.sleep(24 * 3600)    # next run in 24 h
+
+
+def _store_fresh_rate():
+    """Fetch and overwrite cache — always call from the background task."""
+    import time
+    rate, rate_date = _nbu.fetch_from_api()
+    from database import get_db
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO nbu_rate_cache (fetched_ts, rate, rate_date) VALUES (?,?,?)",
+            (int(time.time()), rate, rate_date)
+        )
 
 # --- Include routers ---
 app.include_router(dashboard.router)

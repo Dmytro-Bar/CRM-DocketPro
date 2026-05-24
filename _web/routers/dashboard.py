@@ -631,13 +631,14 @@ async def dashboard(
 
     data = compute_kpi(df, dt, client, ctype)
 
-    # ── NBU rate alerts ────────────────────────────────────────────
+    # ── NBU rate status ────────────────────────────────────────────
     with get_db() as db:
         active_contracts = db.execute(
             "SELECT contract_no, client_name, nbu_rate, nbu_tracking, nbu_threshold_pct "
             "FROM contracts WHERE status='Активний'"
         ).fetchall()
-    nbu = nbu_client.compute_alerts(active_contracts)
+    nbu = nbu_client.compute_status(active_contracts)
+    data["nbu_tracked"]      = nbu["tracked"]
     data["nbu_alerts"]       = nbu["alerts"]
     data["nbu_current_rate"] = nbu["current_rate"]
     data["nbu_rate_date"]    = nbu["rate_date"]

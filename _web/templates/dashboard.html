@@ -49,77 +49,112 @@
 {% set unpaid_list = all_invoices | selectattr('status', 'ne', 'Оплачено') | list %}
 
 {# ══════════════════════════════════════════════════════════════
-   NBU Rate Alerts
+   NBU Rate Block — always shown when tracked contracts exist
 ══════════════════════════════════════════════════════════════ #}
-{% if nbu_alerts %}
-<div style="margin-bottom:18px;border-radius:var(--radius-lg);border:1px solid var(--warning);
-            background:color-mix(in oklch,var(--warning) 6%,var(--surface));overflow:hidden">
-  <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;
-              border-bottom:1px solid var(--warning);
-              background:color-mix(in oklch,var(--warning) 10%,var(--surface))">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
-      <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/>
-      <path d="M12 9v4M12 17h.01"/>
-    </svg>
-    <span style="font-weight:600;font-size:13.5px">
-      Перегляд цін — курс НБУ зріс
+{% if nbu_tracked or nbu_error %}
+<div style="margin-bottom:20px;border-radius:var(--radius-lg);
+            border:1px solid var(--border);background:var(--surface);overflow:hidden">
+
+  {# Header: rate + date #}
+  <div style="display:flex;align-items:center;gap:16px;padding:14px 20px;
+              border-bottom:1px solid var(--border);background:var(--surface-2)">
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-mute)" stroke-width="1.75"
+           stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-bottom:-2px">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+      <span style="font-size:13px;color:var(--text-mute);font-weight:500">Курс НБУ · USD/UAH</span>
+    </div>
+
+    {% if nbu_current_rate %}
+    <span style="font-size:26px;font-weight:700;color:var(--text);
+                 font-family:var(--font-mono);letter-spacing:-.5px">
+      {{ "%.4f"|format(nbu_current_rate) }}
     </span>
-    <span style="font-size:12px;color:var(--text-mute);margin-left:4px">
-      Поточний курс USD: <strong style="color:var(--text)">{{ nbu_current_rate }} грн</strong>
-      {% if nbu_rate_date %}· {{ nbu_rate_date }}{% endif %}
+    <span style="font-size:13px;color:var(--text-mute)">
+      грн &nbsp;·&nbsp; {{ nbu_rate_date or '' }}
     </span>
-    <a href="/contracts" style="margin-left:auto;font-size:12px;color:var(--accent-fg);text-decoration:none;white-space:nowrap">
-      Відкрити договори →
+    {% elif nbu_error %}
+    <span style="font-size:13px;color:var(--danger)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           style="vertical-align:middle;margin-right:4px">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 17h.01"/>
+      </svg>
+      API недоступний: {{ nbu_error }}
+    </span>
+    {% endif %}
+
+    {% if nbu_alerts %}
+    <span style="margin-left:auto;display:flex;align-items:center;gap:6px;
+                 padding:4px 10px;border-radius:var(--radius);
+                 background:color-mix(in oklch,var(--warning) 12%,transparent);
+                 border:1px solid var(--warning);font-size:12px;font-weight:600;color:var(--warning)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/>
+        <path d="M12 9v4M12 17h.01"/>
+      </svg>
+      {{ nbu_alerts|length }} договор{{ 'и' if nbu_alerts|length in [2,3,4] else ('ів' if nbu_alerts|length != 1 else '') }} потребу{{ 'ють' if nbu_alerts|length != 1 else 'є' }} перегляду ціни
+    </span>
+    {% else %}
+    <a href="/contracts" style="margin-left:auto;font-size:12px;color:var(--text-mute);
+                                text-decoration:none;white-space:nowrap">
+      Договори →
     </a>
+    {% endif %}
   </div>
+
+  {# Table — all tracked contracts #}
+  {% if nbu_tracked %}
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead>
       <tr style="border-bottom:1px solid var(--border)">
-        <th style="padding:8px 18px;text-align:left;font-weight:500;color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Договір</th>
-        <th style="padding:8px 18px;text-align:left;font-weight:500;color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Клієнт</th>
-        <th style="padding:8px 18px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Курс (договір)</th>
-        <th style="padding:8px 18px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Курс (зараз)</th>
-        <th style="padding:8px 18px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Зростання</th>
-        <th style="padding:8px 18px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Поріг</th>
+        <th style="padding:7px 20px;text-align:left;font-weight:500;color:var(--text-mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em">Договір</th>
+        <th style="padding:7px 20px;text-align:left;font-weight:500;color:var(--text-mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em">Клієнт</th>
+        <th style="padding:7px 20px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em">Курс (договір)</th>
+        <th style="padding:7px 20px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em">Зміна</th>
+        <th style="padding:7px 20px;text-align:right;font-weight:500;color:var(--text-mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em">Поріг</th>
       </tr>
     </thead>
     <tbody>
-    {% for a in nbu_alerts %}
-    <tr style="border-bottom:1px solid var(--border-soft)">
-      <td style="padding:9px 18px">
+    {% for a in nbu_tracked %}
+    <tr style="border-bottom:1px solid var(--border-soft);
+               {% if a.is_alert %}background:color-mix(in oklch,var(--warning) 5%,transparent){% endif %}">
+      <td style="padding:9px 20px">
         <a href="/contracts/{{ a.contract_no }}/edit"
            style="font-family:var(--font-mono);font-size:12px;color:var(--accent-fg);text-decoration:none;font-weight:500">
           {{ a.contract_no }}
         </a>
       </td>
-      <td style="padding:9px 18px;font-weight:500">{{ a.client }}</td>
-      <td style="padding:9px 18px;text-align:right;font-family:var(--font-mono);color:var(--text-mute)">
-        {{ "%.2f"|format(a.base_rate) }}
+      <td style="padding:9px 20px;font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        {{ a.client }}
       </td>
-      <td style="padding:9px 18px;text-align:right;font-family:var(--font-mono);color:var(--text)">
-        {{ "%.2f"|format(a.current_rate) }}
+      <td style="padding:9px 20px;text-align:right;font-family:var(--font-mono);color:var(--text-mute)">
+        {{ "%.4f"|format(a.base_rate) }}
       </td>
-      <td style="padding:9px 18px;text-align:right">
-        <span style="font-weight:700;color:var(--warning)">+{{ a.delta_pct }}%</span>
+      <td style="padding:9px 20px;text-align:right">
+        {% if a.delta_pct >= 0 %}
+          {% if a.is_alert %}
+          <span style="font-weight:700;color:var(--warning)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+            +{{ "%.2f"|format(a.delta_pct) }}%
+          </span>
+          {% else %}
+          <span style="color:var(--success);font-weight:500">+{{ "%.2f"|format(a.delta_pct) }}%</span>
+          {% endif %}
+        {% else %}
+          <span style="color:var(--text-mute)">{{ "%.2f"|format(a.delta_pct) }}%</span>
+        {% endif %}
       </td>
-      <td style="padding:9px 18px;text-align:right;color:var(--text-mute);font-size:12px">
+      <td style="padding:9px 20px;text-align:right;color:var(--text-mute);font-size:12px">
         ≥ {{ a.threshold }}%
       </td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
-</div>
-{% elif nbu_error %}
-<div style="margin-bottom:14px;padding:10px 16px;border-radius:var(--radius);
-            border:1px solid var(--border);background:var(--surface-2);
-            font-size:12.5px;color:var(--text-mute);display:flex;align-items:center;gap:8px">
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-       stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 17h.01"/>
-  </svg>
-  НБУ API недоступний: {{ nbu_error }}
+  {% endif %}
+
 </div>
 {% endif %}
 

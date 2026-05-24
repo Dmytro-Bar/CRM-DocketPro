@@ -68,7 +68,71 @@ def get_rate_safe() -> tuple:
         return None, None, False, str(exc)
 
 
-# ── Alert computation ──────────────────────────────────────────────────────
+# ── Full status (all tracked contracts) ───────────────────────────────────
+
+def compute_status(active_contracts) -> dict:
+    """
+    Returns status for ALL NBU-tracked contracts (not just alerts).
+    Used by dashboard to show the full NBU table + current rate.
+
+    Returns dict:
+      {
+        "tracked":      list of status dicts (all tracked contracts),
+        "alerts":       list of status dicts (only those >= threshold),
+        "current_rate": float | None,
+        "rate_date":    str   | None,
+        "error":        str   | None,
+      }
+
+    Each status dict:
+      contract_no, client, base_rate, current_rate, delta_pct, threshold, is_alert
+    """
+    tracked_rows = [
+        r for r in active_contracts
+        if r["nbu_tracking"] and float(r["nbu_rate"] or 0) > 0
+    ]
+
+    if not tracked_rows:
+        return {"tracked": [], "alerts": [], "current_rate": None,
+                "rate_date": None, "error": None}
+
+    rate, rate_date, _, error = get_rate_safe()
+    if error:
+        return {"tracked": [], "alerts": [], "current_rate": None,
+                "rate_date": None, "error": error}
+
+    tracked = []
+    alerts  = []
+    for r in tracked_rows:
+        base_rate = float(r["nbu_rate"])
+        threshold = float(r["nbu_threshold_pct"] or 5.0)
+        delta_pct = (rate - base_rate) / base_rate * 100
+        is_alert  = delta_pct >= threshold
+        item = {
+            "contract_no":  r["contract_no"],
+            "client":       r["client_name"] or "",
+            "base_rate":    round(base_rate, 2),
+            "current_rate": round(rate, 2),
+            "delta_pct":    round(delta_pct, 2),
+            "threshold":    threshold,
+            "is_alert":     is_alert,
+        }
+        tracked.append(item)
+        if is_alert:
+            alerts.append(item)
+
+    tracked.sort(key=lambda a: a["delta_pct"], reverse=True)
+    alerts.sort(key=lambda a: a["delta_pct"], reverse=True)
+    return {
+        "tracked":      tracked,
+        "alerts":       alerts,
+        "current_rate": round(rate, 2),
+        "rate_date":    rate_date,
+        "error":        None,
+    }
+
+
+# ── Alert computation (legacy — kept for contracts list page) ──────────────
 
 def compute_alerts(active_contracts) -> dict:
     """
