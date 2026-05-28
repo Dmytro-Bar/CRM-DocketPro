@@ -1,0 +1,97 @@
+{# Partial: list of contract amendments (ДУ) — loaded via HTMX #}
+
+<div id="amendments-section" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute)">
+      Додаткові угоди
+      {% if amendments %}<span style="background:var(--accent);color:var(--accent-contrast,#fff);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:6px;font-weight:700">{{ amendments|length }}</span>{% endif %}
+    </div>
+    <button type="button"
+            onclick="openDuForm('{{ contract_no }}')"
+            style="font-size:11px;color:var(--accent-fg);background:none;border:none;cursor:pointer;padding:0;font-weight:600">
+      + Нова ДУ
+    </button>
+  </div>
+
+  {% if not amendments %}
+  <div style="font-size:12px;color:var(--text-mute);font-style:italic;padding:8px 0">
+    Додаткових угод немає
+  </div>
+  {% else %}
+
+  <div style="display:flex;flex-direction:column;gap:6px">
+    {% for du in amendments %}
+    <div style="
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      background:var(--surface-2);
+      position:relative;
+    ">
+      {# Header row #}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);font-family:var(--font-mono)">
+          {{ du.du_no }}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          {% if du.pdf_path %}
+          <a href="{{ pdf_url(du.pdf_path) }}"
+             target="_blank" title="Відкрити скан ДУ"
+             style="color:var(--success-fg);font-size:11px;text-decoration:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M10 12h4M10 16h4"/></svg>
+            Скан
+          </a>
+          {% endif %}
+          <form method="post" action="/contracts/amendments/{{ du.id }}/delete"
+                onsubmit="return confirm('Видалити ДУ {{ du.du_no }}?')"
+                style="display:inline">
+            <button type="submit" style="background:none;border:none;cursor:pointer;color:var(--text-mute);padding:0;line-height:1" title="Видалити">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {# Dates #}
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--text-mute);margin-bottom:6px">
+        {% if du.sign_date %}
+        <span>Підп.: <b style="color:var(--text)">{{ du.sign_date }}</b></span>
+        {% endif %}
+        {% if du.effective_date %}
+        <span>З: <b style="color:var(--accent-fg)">{{ du.effective_date }}</b></span>
+        {% endif %}
+      </div>
+
+      {# Changed fields #}
+      {% set changes = [] %}
+      {% if du.users is not none %}{% set _ = changes.append('Кор.: ' ~ du.users) %}{% endif %}
+      {% if du.tariff_fx is not none %}
+        {% if contract and contract.currency != 'UAH' %}
+          {% set _ = changes.append('Тариф: ' ~ du.tariff_fx ~ ' ' ~ contract.currency) %}
+        {% else %}
+          {% set _ = changes.append('Тариф: ₴' ~ '{:,.2f}'.format(du.tariff_fx).replace(',', ' ')) %}
+        {% endif %}
+      {% endif %}
+      {% if du.contract_end %}{% set _ = changes.append('Строк до: ' ~ du.contract_end) %}{% endif %}
+
+      {% if changes %}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:{% if du.notes %}6px{% else %}0{% endif %}">
+        {% for ch in changes %}
+        <span style="font-size:11.5px;font-weight:600;background:color-mix(in oklch,var(--accent) 10%,transparent);color:var(--accent-fg);border-radius:4px;padding:2px 7px">
+          {{ ch }}
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# Notes #}
+      {% if du.notes %}
+      <div style="font-size:12px;color:var(--text);white-space:pre-wrap;line-height:1.4;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">{{ du.notes }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>

@@ -109,6 +109,19 @@ CREATE TABLE IF NOT EXISTS nbu_rate_cache (
     rate       REAL    NOT NULL,
     rate_date  TEXT    NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS contract_amendments (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_no    TEXT NOT NULL,
+    du_no          TEXT NOT NULL,
+    sign_date      TEXT,
+    effective_date TEXT,
+    users          INTEGER,
+    tariff_fx      REAL,
+    contract_end   TEXT,
+    notes          TEXT,
+    pdf_path       TEXT
+);
 """
 
 _DEFAULT_EXPENSE_CATEGORIES = [

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request, Form, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
+from typing import Optional
 
 from datetime import date
 from urllib.parse import quote
@@ -361,3 +362,131 @@ async def upload_contract_scan(
             (save_path, contract_no)
         )
     return RedirectResponse(f"/contracts/{contract_no}/edit?scan=ok", status_code=303)
+
+
+# ── Contract Amendments (ДУ) ──────────────────────────────────────────────
+
+def _amendment_scan_path(client_name: str, contract_no: str, du_no: str, ext: str) -> str:
+    folder = os.path.join(
+        CONTRACTS_DIR,
+        _safe_folder(client_name),
+        f"Договір {_safe_folder(contract_no)}",
+        "Додаткові угоди",
+    )
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, f"ДУ_{_safe_folder(du_no)}{ext}")
+
+
+@router.get("/{contract_no}/amendments", response_class=HTMLResponse)
+async def amendments_partial(request: Request, contract_no: str):
+    """HTMX partial: list of amendments for a contract."""
+    with get_db() as db:
+        amendments = db.execute(
+            "SELECT * FROM contract_amendments "
+            "WHERE contract_no=? ORDER BY effective_date, id",
+            (contract_no,)
+        ).fetchall()
+        contract = db.execute(
+            "SELECT client_name, contract_type, currency FROM contracts WHERE contract_no=?",
+            (contract_no,)
+        ).fetchone()
+
+    return templates.TemplateResponse("partials/amendments_list.html", {
+        "request":     request,
+        "amendments":  amendments,
+        "contract_no": contract_no,
+        "contract":    contract,
+    })
+
+
+@router.post("/{contract_no}/amendments/add")
+async def add_amendment(
+    request:        Request,
+    contract_no:    str,
+    du_no:          str          = Form(...),
+    sign_date:      str          = Form(""),
+    effective_date: str          = Form(""),
+    users:          str          = Form(""),       # empty string = not changed
+    tariff_fx:      str          = Form(""),
+    contract_end:   str          = Form(""),
+    notes:          str          = Form(""),
+    du_scan:        UploadFile   = File(None),
+    update_contract: int         = Form(0),        # 1 = also update contract fields
+):
+    users_val     = int(users)     if users.strip()     else None
+    tariff_val    = float(tariff_fx) if tariff_fx.strip() else None
+    end_val       = contract_end.strip() or None
+
+    # Determine whether this amendment is already in effect
+    today = date.today()
+    eff_date = None
+    if effective_date.strip():
+        try:
+            from datetime import datetime
+            eff_date = datetime.strptime(effective_date.strip(), "%d.%m.%Y").date()
+        except ValueError:
+            pass
+
+    # Handle ДУ scan upload
+    pdf_path = None
+    if du_scan and du_scan.filename:
+        ext = Path(du_scan.filename).suffix.lower()
+        if ext in _ALLOWED_SCAN_EXT:
+            with get_db() as db:
+                contract = db.execute(
+                    "SELECT client_name FROM contracts WHERE contract_no=?",
+                    (contract_no,)
+                ).fetchone()
+            if contract:
+                save_path = _amendment_scan_path(
+                    contract["client_name"], contract_no, du_no, ext
+                )
+                content = await du_scan.read()
+                with open(save_path, "wb") as f:
+                    f.write(content)
+                pdf_path = save_path
+
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO contract_amendments "
+            "(contract_no, du_no, sign_date, effective_date, users, tariff_fx, contract_end, notes, pdf_path) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (contract_no, du_no.strip(), sign_date.strip() or None,
+             effective_date.strip() or None,
+             users_val, tariff_val, end_val, notes.strip() or None, pdf_path)
+        )
+
+        # Auto-update contract if requested OR if effective_date is today or past
+        should_update = bool(update_contract) or (eff_date is not None and eff_date <= today)
+        if should_update:
+            parts, vals = [], []
+            if users_val is not None:
+                parts.append("users=?");    vals.append(users_val)
+            if tariff_val is not None:
+                parts.append("tariff_fx=?"); vals.append(tariff_val)
+            if end_val:
+                parts.append("contract_end=?"); vals.append(end_val)
+            if parts:
+                vals.append(contract_no)
+                db.execute(f"UPDATE contracts SET {', '.join(parts)} WHERE contract_no=?", vals)
+
+    return RedirectResponse(f"/contracts?highlight={contract_no}", status_code=303)
+
+
+@router.post("/amendments/{amendment_id}/delete")
+async def delete_amendment(amendment_id: int):
+    with get_db() as db:
+        row = db.execute(
+            "SELECT contract_no, pdf_path FROM contract_amendments WHERE id=?",
+            (amendment_id,)
+        ).fetchone()
+        if row:
+            if row["pdf_path"] and os.path.exists(row["pdf_path"]):
+                try:
+                    os.remove(row["pdf_path"])
+                except OSError:
+                    pass
+            db.execute("DELETE FROM contract_amendments WHERE id=?", (amendment_id,))
+            contract_no = row["contract_no"]
+
+    return RedirectResponse(f"/contracts?highlight={contract_no}", status_code=303)

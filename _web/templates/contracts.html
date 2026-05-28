@@ -467,6 +467,15 @@
       </div>
     </div>
 
+    {# Amendments (ДУ) — loaded via HTMX when drawer opens #}
+    <div id="ct-drw-amendments"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--text-mute)">Завантаження ДУ…</div>
+      </div>
+    </div>
+
   </div>
 
   <div class="drawer-footer">
@@ -484,6 +493,83 @@
 .sort-ind { font-size:10px; color:var(--text-mute); margin-left:2px; }
 .contract-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); }
 </style>
+
+{# ── Add Amendment drawer ──────────────────────────────────── #}
+<div class="drawer" id="du-drawer" style="max-width:420px">
+  <div class="drawer-header">
+    <h2 style="font-size:14px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 11v6M9 14h6"/></svg>
+      Нова додаткова угода
+    </h2>
+    <button class="drawer-close" onclick="closeDuDrawer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <form id="du-form" method="post" enctype="multipart/form-data" action="">
+    <div class="drawer-body" style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="form-group">
+        <label class="form-label">№ додаткової угоди *</label>
+        <input type="text" name="du_no" class="form-control" placeholder="ДУ №1" required
+               style="font-family:var(--font-mono)"/>
+        <div style="font-size:11px;color:var(--text-mute);margin-top:3px">Наприклад: ДУ №1, ДУ-2, Доп. угода №1</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Дата підписання</label>
+          <input type="text" name="sign_date" class="form-control" placeholder="дд.мм.рррр"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Набирає чинності</label>
+          <input type="text" name="effective_date" class="form-control" placeholder="дд.мм.рррр"/>
+        </div>
+      </div>
+
+      <div style="padding:12px;background:color-mix(in oklch,var(--accent) 5%,var(--surface));border-radius:var(--radius);border:1px solid color-mix(in oklch,var(--accent) 20%,transparent)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-mute);margin-bottom:10px">Що змінюється (залиш порожнім якщо не змінилось)</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Кількість користувачів</label>
+            <input type="number" name="users" class="form-control" placeholder="залиш порожнім" min="1"/>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Новий тариф (у валюті договору)</label>
+            <input type="number" name="tariff_fx" class="form-control" placeholder="залиш порожнім" step="0.01" min="0"/>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Новий строк дії договору</label>
+            <input type="text" name="contract_end" class="form-control" placeholder="дд.мм.рррр"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Примітки / опис змін</label>
+        <textarea name="notes" class="form-control" rows="3" placeholder="Наприклад: збільшення кількості ліцензій з 22 до 23 у зв'язку з розширенням штату"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Скан підписаної ДУ (PDF / JPG / PNG)</label>
+        <input type="file" name="du_scan" accept=".pdf,.jpg,.jpeg,.png" class="form-control"/>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:10px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface-2)">
+        <input type="checkbox" name="update_contract" value="1" id="du-update-cb" checked/>
+        <span>Оновити умови договору одразу</span>
+        <span style="font-size:11px;color:var(--text-mute);margin-left:auto">(якщо ДУ вже набрала чинності)</span>
+      </label>
+
+    </div>
+    <div class="drawer-footer">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+        Зберегти ДУ
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="closeDuDrawer()">Скасувати</button>
+    </div>
+  </form>
+</div>
 
 {% endblock %}
 
@@ -793,7 +879,36 @@ function openContractDrawer(el) {
   document.getElementById('ct-drw-invoices').href = '/invoices?client=' + encodeURIComponent(d.client);
   document.getElementById('ct-drw-new-inv').href  = '/invoices/new?contract_no=' + encodeURIComponent(d.no);
 
+  // Load amendments via HTMX
+  const amEl = document.getElementById('ct-drw-amendments');
+  if (amEl) {
+    amEl.setAttribute('hx-get', '/contracts/' + encodeURIComponent(d.no) + '/amendments');
+    amEl.innerHTML = '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-mute)">Завантаження ДУ…</div></div>';
+    htmx.process(amEl);
+    htmx.trigger(amEl, 'load');
+  }
+
   openDrawer('contract-drawer');
+}
+
+// ── Amendment drawer ───────────────────────────────────────────
+let _duContractNo = '';
+
+function openDuForm(contractNo) {
+  _duContractNo = contractNo;
+  document.getElementById('du-form').action = '/contracts/' + encodeURIComponent(contractNo) + '/amendments/add';
+  document.getElementById('du-form').reset();
+  // Close contract drawer, open du drawer
+  document.getElementById('contract-drawer').classList.remove('open');
+  openDrawer('du-drawer');
+}
+
+function closeDuDrawer() {
+  closeDrawer();
+  // Re-open contract drawer if we have a current contract
+  if (_duContractNo) {
+    setTimeout(() => openDrawer('contract-drawer'), 150);
+  }
 }
 </script>
 {% endblock %}
