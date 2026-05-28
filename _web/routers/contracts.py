@@ -99,6 +99,29 @@ async def list_contracts(
     with get_db() as db:
         rows = db.execute(sql, args).fetchall()
 
+        # Build last_inv_period: contract_no → invoice with max period_to date.
+        # Must compare as Python date objects (period_to stored as dd.mm.yyyy string).
+        inv_rows = db.execute(
+            "SELECT contract_no, period_from, period_to, sum_uah, months "
+            "FROM invoices WHERE pay_status != 'Скасовано' "
+            "AND period_to IS NOT NULL AND period_to != ''"
+        ).fetchall()
+
+    last_inv_period: dict = {}
+    for ir in inv_rows:
+        cno = ir["contract_no"] or ""
+        pto = parse_date(ir["period_to"])
+        if not pto or not cno:
+            continue
+        existing = last_inv_period.get(cno)
+        if not existing or pto > existing["to"]:
+            last_inv_period[cno] = {
+                "to":      pto,
+                "from":    parse_date(ir["period_from"]),
+                "sum_uah": float(ir["sum_uah"] or 0),
+                "months":  int(ir["months"] or 1),
+            }
+
     contracts   = []
     mrr         = 0.0
     total_debt  = 0.0
@@ -126,7 +149,21 @@ async def list_contracts(
             active_cnt += 1
             total_debt += debt
             if ctype_r == "Доступ":
-                mrr += float(r["tariff_fx"] or 0) * int(r["users"] or 1)
+                info = last_inv_period.get(r["contract_no"])
+                if info:
+                    # Same logic as dashboard: sum_uah of latest-period invoice ÷ months
+                    pf, pt = info["from"], info["to"]
+                    sv = info["sum_uah"]
+                    if pf and pt:
+                        mc = (pt.year * 12 + pt.month) - (pf.year * 12 + pf.month) + 1
+                        mc = max(1, mc)
+                    else:
+                        mc = info["months"] or 1
+                    mrr += sv / mc
+                else:
+                    # No invoice yet — fall back to tariff × users (UAH only)
+                    if (r["currency"] or "UAH") == "UAH":
+                        mrr += float(r["tariff_fx"] or 0) * int(r["users"] or 1)
             else:
                 hourly_cnt += 1
 
