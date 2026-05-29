@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     pay_date      TEXT,
     invoice_type  TEXT,
     months        INTEGER,
+    users         INTEGER DEFAULT 1,
     sum_words     TEXT,
     pdf_path      TEXT,
     discount_pct  REAL DEFAULT 0
@@ -142,6 +143,7 @@ def init_db():
             "ALTER TABLE invoices   ADD COLUMN reminder_date      TEXT",
             "ALTER TABLE invoices   ADD COLUMN reminder_pdf_path  TEXT",
             "ALTER TABLE invoices   ADD COLUMN email_sent_date    TEXT",
+            "ALTER TABLE invoices   ADD COLUMN users              INTEGER DEFAULT 1",
             "ALTER TABLE acts       ADD COLUMN email_sent_date    TEXT",
             "ALTER TABLE contracts  ADD COLUMN nbu_tracking       INTEGER DEFAULT 0",
             "ALTER TABLE contracts  ADD COLUMN nbu_threshold_pct  REAL DEFAULT 5.0",

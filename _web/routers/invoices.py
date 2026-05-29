@@ -270,13 +270,13 @@ async def create_invoice(
             "INSERT INTO invoices "
             "(invoice_no,contract_no,client_name,invoice_date,fx_rate,currency,"
             "sum_fx,sum_uah,period_from,period_to,due_date,pay_status,"
-            "invoice_type,months,discount_pct) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,'Не оплачено',?,?,?)",
+            "invoice_type,months,users,discount_pct) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,'Не оплачено',?,?,?,?)",
             (inv_no, contract_no, contract["client_name"],
              fmt_date(inv_date), fx_rate or None, currency,
              round(sum_fx, 2), sum_uah,
              fmt_date(p_from), fmt_date(p_to), fmt_date(due),
-             ctype, months or None, discount_pct)
+             ctype, months or None, users, discount_pct)
         )
 
     return RedirectResponse(f"/invoices/{inv_no}/preview", status_code=303)
@@ -318,7 +318,7 @@ async def preview_invoice(request: Request, invoice_no: str):
         "contract_no":       inv["contract_no"] or "",
         "client_name":       inv["client_name"] or "",
         "client_address":    (client_row["address"] or "") if client_row else "",
-        "users":             int(contract["users"] or 1) if contract else 1,
+        "users":             int(inv["users"] or 1),
         "months":            int(inv["months"] or 1),
         "hours":             hours,
         "hour_rate_str":     _app_fmt_money(hour_rate),
@@ -391,7 +391,7 @@ async def generate_pdf_invoice(invoice_no: str):
         "contract_no":       inv["contract_no"] or "",
         "client_name":       inv["client_name"] or "",
         "client_address":    (client_row["address"] or "") if client_row else "",
-        "users":             int(contract["users"] or 1) if contract else 1,
+        "users":             int(inv["users"] or 1),
         "months":            int(inv["months"] or 1),
         "hours":             hours,
         "hour_rate":         hour_rate,
