@@ -123,6 +123,11 @@ CREATE TABLE IF NOT EXISTS contract_amendments (
     notes          TEXT,
     pdf_path       TEXT
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 _DEFAULT_EXPENSE_CATEGORIES = [

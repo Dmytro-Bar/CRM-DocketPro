@@ -23,6 +23,7 @@ from email_handler import (send_email, email_configured,
                             body_invoice, body_reminder,
                             EMAIL_FROM_NAME)
 from config import CONTRACTS_DIR, TMP_DIR
+from routers.sig_utils import apply_signature_to_pdf
 _DOCS_OK = True
 
 router = APIRouter(prefix="/invoices")
@@ -32,6 +33,77 @@ templates.env.globals["fmt_date"]   = fmt_date
 templates.env.globals["norm"]       = norm
 templates.env.globals["is_overdue"] = is_overdue
 templates.env.globals["pdf_url"]    = pdf_url
+
+
+def _generate_invoice_pdf(invoice_no: str) -> Optional[str]:
+    """Generate Word → PDF for an existing invoice record. Returns pdf_path or None."""
+    with get_db() as db:
+        inv = db.execute("SELECT * FROM invoices WHERE invoice_no=?", (invoice_no,)).fetchone()
+        if not inv:
+            return None
+        contract = db.execute(
+            "SELECT * FROM contracts WHERE contract_no=?", (inv["contract_no"],)
+        ).fetchone() if inv["contract_no"] else None
+        client_row = db.execute(
+            "SELECT address FROM clients WHERE edrpou=?", (contract["edrpou"],)
+        ).fetchone() if contract else None
+
+    ctype        = norm(contract["contract_type"] or "") if contract else ""
+    sum_uah      = float(inv["sum_uah"] or 0)
+    discount_pct = float(inv["discount_pct"] or 0)
+    gross        = round(sum_uah / (1 - discount_pct / 100), 2) if discount_pct else sum_uah
+    discount_amt = round(gross - sum_uah, 2)
+    tariff_fx    = float(contract["tariff_fx"] or 0) if contract else 0
+    fx_rate      = float(inv["fx_rate"] or 1) or 1
+    currency     = inv["currency"] or "UAH"
+    tariff_uah   = tariff_fx * fx_rate if (currency != "UAH" and fx_rate) else tariff_fx
+    hour_rate    = float(contract["hour_rate"] or 0) if contract else 0
+    sum_fx       = float(inv["sum_fx"] or 0)
+    hours        = round(sum_fx / hour_rate, 1) if hour_rate else 0.0
+
+    doc_data = {
+        "invoice_no":        invoice_no,
+        "invoice_date_str":  inv["invoice_date"] or "",
+        "contract_no":       inv["contract_no"] or "",
+        "client_name":       inv["client_name"] or "",
+        "client_address":    (client_row["address"] or "") if client_row else "",
+        "users":             int(inv["users"] or 1),
+        "months":            int(inv["months"] or 1),
+        "hours":             hours,
+        "hour_rate":         hour_rate,
+        "subject":           (contract["subject"] or "") if contract else "",
+        "contract_date_str": (contract["contract_date"] or "") if contract else "",
+        "period_from_str":   inv["period_from"] or "",
+        "period_to_str":     inv["period_to"] or "",
+        "due_date_str":      inv["due_date"] or "",
+        "tariff_str":        _app_fmt_money(tariff_uah),
+        "sum_gross_str":     _app_fmt_money(gross),
+        "discount_pct":      discount_pct,
+        "discount_amt_str":  _app_fmt_money(discount_amt),
+        "sum_str":           _app_fmt_money(sum_uah),
+        "sum_words":         inv["sum_words"] or amount_to_words_uah(sum_uah),
+        "sum_uah":           sum_uah,
+    }
+
+    try:
+        if ctype == "Доступ":
+            docx_path = generate_invoice_access(doc_data)
+        else:
+            docx_path = generate_invoice_hourly(doc_data)
+
+        pdf_path_out = build_invoice_pdf_path(
+            inv["client_name"] or "", inv["contract_no"] or "", invoice_no
+        )
+        convert_to_pdf(docx_path, pdf_path_out)
+
+        with get_db() as db:
+            db.execute(
+                "UPDATE invoices SET pdf_path=? WHERE invoice_no=?",
+                (pdf_path_out, invoice_no)
+            )
+        return pdf_path_out
+    except Exception:
+        return None
 
 
 def generate_invoice_no(for_date: date) -> str:
@@ -279,7 +351,10 @@ async def create_invoice(
              ctype, months or None, users, discount_pct)
         )
 
-    return RedirectResponse(f"/invoices/{inv_no}/preview", status_code=303)
+    # Generate PDF immediately — no preview step needed
+    _generate_invoice_pdf(inv_no)
+
+    return RedirectResponse("/invoices", status_code=303)
 
 
 @router.get("/{invoice_no}/preview", response_class=HTMLResponse)
@@ -358,77 +433,33 @@ async def preview_invoice(request: Request, invoice_no: str):
 
 @router.post("/{invoice_no}/generate-pdf")
 async def generate_pdf_invoice(invoice_no: str):
-    """Генерує Word → PDF через LibreOffice, зберігає в Договори/, оновлює pdf_path в БД."""
+    """(Re)generate Word → PDF for an existing invoice. Used from preview page."""
+    _generate_invoice_pdf(invoice_no)
+    return RedirectResponse(f"/invoices/{invoice_no}/preview?saved=1", status_code=303)
+
+
+@router.post("/{invoice_no}/apply-signature")
+async def apply_signature_invoice(invoice_no: str, request: Request):
+    """Overlay the configured signature image onto the invoice PDF."""
     with get_db() as db:
         inv = db.execute(
-            "SELECT * FROM invoices WHERE invoice_no=?", (invoice_no,)
+            "SELECT pdf_path FROM invoices WHERE invoice_no=?", (invoice_no,)
         ).fetchone()
-        if not inv:
-            return HTMLResponse("Рахунок не знайдено", status_code=404)
-        contract = db.execute(
-            "SELECT * FROM contracts WHERE contract_no=?", (inv["contract_no"],)
-        ).fetchone() if inv["contract_no"] else None
-        client_row = db.execute(
-            "SELECT address FROM clients WHERE edrpou=?", (contract["edrpou"],)
-        ).fetchone() if contract else None
 
-    ctype        = norm(contract["contract_type"] or "") if contract else ""
-    sum_uah      = float(inv["sum_uah"] or 0)
-    discount_pct = float(inv["discount_pct"] or 0)
-    gross        = round(sum_uah / (1 - discount_pct / 100), 2) if discount_pct else sum_uah
-    discount_amt = round(gross - sum_uah, 2)
-    tariff_fx    = float(contract["tariff_fx"] or 0) if contract else 0
-    fx_rate      = float(inv["fx_rate"] or 1) or 1
-    currency     = inv["currency"] or "UAH"
-    tariff_uah   = tariff_fx * fx_rate if (currency != "UAH" and fx_rate) else tariff_fx
-    hour_rate    = float(contract["hour_rate"] or 0) if contract else 0
-    sum_fx       = float(inv["sum_fx"] or 0)
-    hours        = round(sum_fx / hour_rate, 1) if hour_rate else 0.0
+    if not inv or not inv["pdf_path"]:
+        msg = "PDF рахунку не знайдено — спочатку згенеруйте PDF"
+        if request.headers.get("HX-Request"):
+            return HTMLResponse(f'<span style="color:var(--danger-fg)">{msg}</span>')
+        return HTMLResponse(msg, status_code=400)
 
-    doc_data = {
-        "invoice_no":        invoice_no,
-        "invoice_date_str":  inv["invoice_date"] or "",
-        "contract_no":       inv["contract_no"] or "",
-        "client_name":       inv["client_name"] or "",
-        "client_address":    (client_row["address"] or "") if client_row else "",
-        "users":             int(inv["users"] or 1),
-        "months":            int(inv["months"] or 1),
-        "hours":             hours,
-        "hour_rate":         hour_rate,
-        "subject":           (contract["subject"] or "") if contract else "",
-        "contract_date_str": (contract["contract_date"] or "") if contract else "",
-        "period_from_str":   inv["period_from"] or "",
-        "period_to_str":     inv["period_to"] or "",
-        "due_date_str":      inv["due_date"] or "",
-        "tariff_str":        _app_fmt_money(tariff_uah),
-        "sum_gross_str":     _app_fmt_money(gross),
-        "discount_pct":      discount_pct,
-        "discount_amt_str":  _app_fmt_money(discount_amt),
-        "sum_str":           _app_fmt_money(sum_uah),
-        "sum_words":         inv["sum_words"] or amount_to_words_uah(sum_uah),
-        "sum_uah":           sum_uah,
-    }
+    ok, err = apply_signature_to_pdf(inv["pdf_path"])
 
-    try:
-        if ctype == "Доступ":
-            docx_path = generate_invoice_access(doc_data)
-        else:
-            docx_path = generate_invoice_hourly(doc_data)
+    if request.headers.get("HX-Request"):
+        if ok:
+            return HTMLResponse('<span style="color:var(--success-fg)">✓ Підпис накладено</span>')
+        return HTMLResponse(f'<span style="color:var(--danger-fg)">{err}</span>')
 
-        pdf_path_out = build_invoice_pdf_path(
-            inv["client_name"] or "", inv["contract_no"] or "", invoice_no
-        )
-        convert_to_pdf(docx_path, pdf_path_out)
-
-        with get_db() as db:
-            db.execute(
-                "UPDATE invoices SET pdf_path=? WHERE invoice_no=?",
-                (pdf_path_out, invoice_no)
-            )
-    except Exception:
-        pass  # Помилка конвертації — повертаємо в редактор без pdf_url
-
-    return RedirectResponse(f"/invoices/{invoice_no}/preview?saved=1", status_code=303)
+    return RedirectResponse("/invoices", status_code=303)
 
 
 @router.post("/{invoice_no}/finalize")

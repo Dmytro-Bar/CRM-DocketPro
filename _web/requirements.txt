@@ -5,3 +5,5 @@ python-multipart
 openpyxl
 requests
 python-dotenv
+pypdf
+reportlab

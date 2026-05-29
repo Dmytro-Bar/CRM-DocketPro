@@ -2,6 +2,7 @@
 
 import os
 from datetime import date
+from typing import Optional
 from urllib.parse import quote
 from fastapi import APIRouter, Request, Form, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
@@ -17,6 +18,7 @@ from word_handler import (generate_act_with_template, resolve_act_template,
 from config import CONTRACTS_DIR, TMP_DIR
 from email_handler import send_email, email_configured, body_act, EMAIL_FROM_NAME
 from utils import fmt_money as _app_fmt_money
+from routers.sig_utils import apply_signature_to_pdf
 _DOCS_OK = True
 
 router = APIRouter(prefix="/acts")
@@ -26,6 +28,70 @@ templates.env.globals["fmt_date"]  = fmt_date
 templates.env.globals["norm"]      = norm
 templates.env.globals["pdf_url"]   = pdf_url
 
+
+
+def _generate_act_pdf(act_no: str) -> Optional[str]:
+    """Generate Word → PDF for an existing act record. Returns pdf_path or None."""
+    with get_db() as db:
+        act = db.execute("SELECT * FROM acts WHERE act_no=?", (act_no,)).fetchone()
+        if not act:
+            return None
+        inv = db.execute(
+            "SELECT * FROM invoices WHERE invoice_no=?", (act["invoice_no"],)
+        ).fetchone() if act["invoice_no"] else None
+        contract = db.execute(
+            "SELECT * FROM contracts WHERE contract_no=?", (act["contract_no"],)
+        ).fetchone() if act["contract_no"] else None
+        client_row = db.execute(
+            "SELECT edrpou, address, director FROM clients WHERE edrpou=?",
+            (contract["edrpou"],)
+        ).fetchone() if contract else None
+
+    ctype     = norm(contract["contract_type"] or "") if contract else ""
+    sum_uah   = float(act["sum_uah"] or 0)
+    hour_rate = float(contract["hour_rate"] or 0) if contract else 0
+    sum_fx    = float(inv["sum_fx"] or 0) if inv else 0
+    hours     = round(sum_fx / hour_rate, 1) if hour_rate else 0.0
+
+    doc_data = {
+        "act_no":            act_no,
+        "act_date_str":      act["act_date"] or "",
+        "contract_no":       act["contract_no"] or "",
+        "contract_date_str": (contract["contract_date"] or "") if contract else "",
+        "client_name":       act["client_name"] or "",
+        "edrpou":            (client_row["edrpou"]  or "") if client_row else "",
+        "client_director":   (client_row["director"] or "") if client_row else "",
+        "period_from_str":   act["period_from"] or "",
+        "period_to_str":     act["period_to"] or "",
+        "users":             int(inv["users"] or 1) if inv else 1,
+        "months":            int(inv["months"] or 1) if inv else 1,
+        "hours":             hours,
+        "hour_rate_str":     _app_fmt_money(hour_rate),
+        "tariff_str":        _app_fmt_money(float(contract["tariff_fx"] or 0) if contract else 0),
+        "subject":           (contract["subject"] or "") if contract else "",
+        "sum_str":           _app_fmt_money(sum_uah),
+        "sum_words":         amount_to_words_uah(sum_uah),
+        "sum_uah":           sum_uah,
+    }
+
+    try:
+        act_template_file = (contract["act_template"] or "") if contract else ""
+        tpl_path  = resolve_act_template(ctype, act_template_file)
+        docx_path = generate_act_with_template(doc_data, tpl_path)
+
+        pdf_path_out = build_act_pdf_path(
+            act["client_name"] or "", act["contract_no"] or "", act_no
+        )
+        convert_to_pdf(docx_path, pdf_path_out)
+
+        with get_db() as db:
+            db.execute(
+                "UPDATE acts SET pdf_path=? WHERE act_no=?",
+                (pdf_path_out, act_no)
+            )
+        return pdf_path_out
+    except Exception:
+        return None
 
 
 def generate_act_no() -> str:
@@ -220,7 +286,10 @@ async def create_act(
              inv["sum_uah"], status)
         )
 
-    return RedirectResponse(f"/acts/{act_no}/preview", status_code=303)
+    # Generate PDF immediately — no preview step needed
+    _generate_act_pdf(act_no)
+
+    return RedirectResponse("/acts", status_code=303)
 
 
 @router.get("/{act_no}/preview", response_class=HTMLResponse)
@@ -299,69 +368,31 @@ async def preview_act(request: Request, act_no: str):
 
 @router.post("/{act_no}/generate-pdf")
 async def generate_pdf_act(act_no: str):
-    """Генерує Word → PDF через LibreOffice, зберігає в Договори/, оновлює pdf_path в БД."""
-    with get_db() as db:
-        act = db.execute("SELECT * FROM acts WHERE act_no=?", (act_no,)).fetchone()
-        if not act:
-            return HTMLResponse("Акт не знайдено", status_code=404)
-        inv = db.execute(
-            "SELECT * FROM invoices WHERE invoice_no=?", (act["invoice_no"],)
-        ).fetchone() if act["invoice_no"] else None
-        contract = db.execute(
-            "SELECT * FROM contracts WHERE contract_no=?", (act["contract_no"],)
-        ).fetchone() if act["contract_no"] else None
-        client_row = db.execute(
-            "SELECT edrpou, address, director FROM clients WHERE edrpou=?",
-            (contract["edrpou"],)
-        ).fetchone() if contract else None
-
-    ctype     = norm(contract["contract_type"] or "") if contract else ""
-    sum_uah   = float(act["sum_uah"] or 0)
-    tariff_fx = float(contract["tariff_fx"] or 0) if contract else 0
-    hour_rate = float(contract["hour_rate"] or 0) if contract else 0
-    sum_fx    = float(inv["sum_fx"] or 0) if inv else 0
-    hours     = round(sum_fx / hour_rate, 1) if hour_rate else 0.0
-
-    doc_data = {
-        "act_no":            act_no,
-        "act_date_str":      act["act_date"] or "",
-        "contract_no":       act["contract_no"] or "",
-        "contract_date_str": (contract["contract_date"] or "") if contract else "",
-        "client_name":       act["client_name"] or "",
-        "edrpou":            (client_row["edrpou"]  or "") if client_row else "",
-        "client_director":   (client_row["director"] or "") if client_row else "",
-        "period_from_str":   act["period_from"] or "",
-        "period_to_str":     act["period_to"] or "",
-        "users":             int(inv["users"] or 1) if inv else 1,
-        "months":            int(inv["months"] or 1) if inv else 1,
-        "hours":             hours,
-        "hour_rate_str":     _app_fmt_money(hour_rate),
-        "tariff_str":        _app_fmt_money(tariff_fx),
-        "subject":           (contract["subject"] or "") if contract else "",
-        "sum_str":           _app_fmt_money(sum_uah),
-        "sum_words":         amount_to_words_uah(sum_uah),
-        "sum_uah":           sum_uah,
-    }
-
-    try:
-        act_template_file = (contract["act_template"] or "") if contract else ""
-        tpl_path = resolve_act_template(ctype, act_template_file)
-        docx_path = generate_act_with_template(doc_data, tpl_path)
-
-        pdf_path_out = build_act_pdf_path(
-            act["client_name"] or "", act["contract_no"] or "", act_no
-        )
-        convert_to_pdf(docx_path, pdf_path_out)
-
-        with get_db() as db:
-            db.execute(
-                "UPDATE acts SET pdf_path=? WHERE act_no=?",
-                (pdf_path_out, act_no)
-            )
-    except Exception:
-        pass
-
+    """(Re)generate Word → PDF for an existing act. Used from preview page."""
+    _generate_act_pdf(act_no)
     return RedirectResponse(f"/acts/{act_no}/preview?saved=1", status_code=303)
+
+
+@router.post("/{act_no}/apply-signature")
+async def apply_signature_act(act_no: str, request: Request):
+    """Overlay the configured signature image onto the act PDF."""
+    with get_db() as db:
+        act = db.execute("SELECT pdf_path FROM acts WHERE act_no=?", (act_no,)).fetchone()
+
+    if not act or not act["pdf_path"]:
+        msg = "PDF акту не знайдено — спочатку згенеруйте PDF"
+        if request.headers.get("HX-Request"):
+            return HTMLResponse(f'<span style="color:var(--danger-fg)">{msg}</span>')
+        return HTMLResponse(msg, status_code=400)
+
+    ok, err = apply_signature_to_pdf(act["pdf_path"])
+
+    if request.headers.get("HX-Request"):
+        if ok:
+            return HTMLResponse('<span style="color:var(--success-fg)">✓ Підпис накладено</span>')
+        return HTMLResponse(f'<span style="color:var(--danger-fg)">{err}</span>')
+
+    return RedirectResponse("/acts", status_code=303)
 
 
 @router.post("/{act_no}/finalize")
