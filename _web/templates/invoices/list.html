@@ -256,12 +256,6 @@
           <a href="{{ pdf_url(r.pdf_path) }}" target="_blank" class="btn btn-sm btn-ghost" title="PDF" onclick="event.stopPropagation()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
           </a>
-          <form method="post" action="/invoices/{{ r.invoice_no }}/apply-signature"
-                onsubmit="event.stopPropagation()">
-            <button type="submit" class="btn btn-sm btn-ghost" title="Накласти підпис" style="color:var(--text-mute)" onclick="event.stopPropagation()">
-              ✍
-            </button>
-          </form>
           {% endif %}
           <form method="post" action="/invoices/{{ r.invoice_no }}/delete"
                 onsubmit="event.stopPropagation(); return confirm('Видалити {{ r.invoice_no }}?')">

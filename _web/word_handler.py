@@ -79,7 +79,7 @@ def _replace_in_paragraph(para, replacements: dict):
             t.text = ''
 
 
-def _inject_signature_image(doc, sig_path: str, width_cm: float = 1.5) -> bool:
+def _inject_signature_image(doc, sig_path: str, width_cm: float = 2.0) -> bool:
     """Знаходить {{ПІДПИС}} і замінює ТІЛЬКИ цей плейсхолдер на зображення.
 
     Весь інший текст у параграфі залишається незайманим.
