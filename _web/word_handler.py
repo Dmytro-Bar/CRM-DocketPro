@@ -79,31 +79,68 @@ def _replace_in_paragraph(para, replacements: dict):
             t.text = ''
 
 
-def _inject_signature_image(doc, sig_path: str, width_cm: float = 4.5) -> bool:
-    """Знаходить параграф з {{ПІДПИС}} і замінює його зображенням підпису.
+def _inject_signature_image(doc, sig_path: str, width_cm: float = 2.5) -> bool:
+    """Знаходить {{ПІДПИС}} і замінює ТІЛЬКИ цей плейсхолдер на зображення.
 
-    Повертає True якщо плейсхолдер знайдено і замінено.
+    Весь інший текст у параграфі залишається незайманим.
     Шукає у тілі документа, таблицях, хедері та футері.
     """
     from docx.shared import Cm
+    from docx.oxml import OxmlElement
 
     SIG_TAG = '{{ПІДПИС}}'
 
     def _try_para(para) -> bool:
-        # Зібрати весь текст параграфа через w:t (охоплює і гіперпосилання)
-        full = ''.join(t.text or '' for t in para._element.iter(qn('w:t')))
-        if SIG_TAG not in full:
+        if SIG_TAG not in (para.text or ''):
             return False
 
-        p_elem = para._element
-        # Видалити всі runs (w:r) та гіперпосилання (w:hyperlink) з параграфа
-        for tag in ('w:r', 'w:hyperlink'):
-            for child in list(p_elem.findall(qn(tag))):
-                p_elem.remove(child)
+        # Крок 1: шукаємо run де тег є цілком (найпоширеніший випадок)
+        for run in para.runs:
+            if SIG_TAG in run.text:
+                idx    = run.text.index(SIG_TAG)
+                before = run.text[:idx]
+                after  = run.text[idx + len(SIG_TAG):]
 
-        # Додати новий run із зображенням
-        run = para.add_run()
-        run.add_picture(sig_path, width=Cm(width_cm))
+                run.text = before                              # текст до підпису
+                run.add_picture(sig_path, width=Cm(width_cm)) # вставляємо підпис
+
+                if after:
+                    # Вставляємо текст після підпису як окремий run у XML
+                    new_r = OxmlElement('w:r')
+                    new_t = OxmlElement('w:t')
+                    new_t.text = after
+                    if after != after.strip():
+                        new_t.set(
+                            '{http://www.w3.org/XML/1998/namespace}space',
+                            'preserve')
+                    new_r.append(new_t)
+                    run._r.addnext(new_r)
+
+                return True
+
+        # Крок 2: тег розбитий між кількома runs — нормалізуємо
+        runs      = para.runs
+        full_text = ''.join(r.text for r in runs)
+        if SIG_TAG not in full_text:
+            return False
+
+        tag_start   = full_text.index(SIG_TAG)
+        tag_end     = tag_start + len(SIG_TAG)
+        before_text = full_text[:tag_start]
+        after_text  = full_text[tag_end:]
+
+        # Очищаємо всі runs (примусово — тег розбитий, не обійтись)
+        for run in runs:
+            run.text = ''
+
+        # Відновлюємо: before + зображення + after
+        anchor = runs[0] if runs else para.add_run()
+        anchor.text = before_text
+        anchor.add_picture(sig_path, width=Cm(width_cm))
+
+        if after_text:
+            para.add_run(after_text)
+
         return True
 
     # Тіло документа
