@@ -98,11 +98,18 @@ def generate_act_no() -> str:
     today = date.today()
     prefix = "ACT-" + today.strftime("%d%m%Y")
     with get_db() as db:
-        count = db.execute(
-            "SELECT COUNT(*) FROM acts WHERE act_no LIKE ?",
-            (f"{prefix}%",)
-        ).fetchone()[0]
-    return f"{prefix}-{str(count + 1).zfill(3)}"
+        rows = db.execute(
+            "SELECT act_no FROM acts WHERE act_no LIKE ?",
+            (f"{prefix}-%",)
+        ).fetchall()
+    # Use MAX of existing sequence numbers to avoid conflicts after deletions
+    max_n = 0
+    for row in rows:
+        try:
+            max_n = max(max_n, int(row["act_no"].rsplit("-", 1)[-1]))
+        except (ValueError, IndexError):
+            pass
+    return f"{prefix}-{str(max_n + 1).zfill(3)}"
 
 
 @router.get("", response_class=HTMLResponse)

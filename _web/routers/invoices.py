@@ -110,11 +110,18 @@ def _generate_invoice_pdf(invoice_no: str) -> Optional[str]:
 def generate_invoice_no(for_date: date) -> str:
     prefix = "RAH-" + for_date.strftime("%d%m%Y")
     with get_db() as db:
-        count = db.execute(
-            "SELECT COUNT(*) FROM invoices WHERE invoice_no LIKE ?",
-            (f"{prefix}%",)
-        ).fetchone()[0]
-    return f"{prefix}-{str(count + 1).zfill(3)}"
+        rows = db.execute(
+            "SELECT invoice_no FROM invoices WHERE invoice_no LIKE ?",
+            (f"{prefix}-%",)
+        ).fetchall()
+    # Use MAX of existing sequence numbers to avoid conflicts after deletions
+    max_n = 0
+    for row in rows:
+        try:
+            max_n = max(max_n, int(row["invoice_no"].rsplit("-", 1)[-1]))
+        except (ValueError, IndexError):
+            pass
+    return f"{prefix}-{str(max_n + 1).zfill(3)}"
 
 
 @router.get("", response_class=HTMLResponse)
