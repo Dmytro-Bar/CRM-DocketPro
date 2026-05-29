@@ -153,15 +153,11 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
           </a>
           <form method="post" action="/acts/{{ r.act_no }}/apply-signature"
-                onclick="event.stopPropagation()"
-                hx-post="/acts/{{ r.act_no }}/apply-signature"
-                hx-target="#sig-msg-act-{{ loop.index }}"
-                hx-swap="innerHTML">
-            <button type="submit" class="btn btn-sm btn-ghost" title="Накласти підпис" style="color:var(--text-mute)">
+                onsubmit="event.stopPropagation()">
+            <button type="submit" class="btn btn-sm btn-ghost" title="Накласти підпис" style="color:var(--text-mute)" onclick="event.stopPropagation()">
               ✍
             </button>
           </form>
-          <span id="sig-msg-act-{{ loop.index }}" style="font-size:10px;white-space:nowrap"></span>
           <form method="post" action="/acts/{{ r.act_no }}/send-email"
                 onsubmit="event.stopPropagation(); return confirm('Надіслати акт {{ r.act_no }} на email клієнта?{% if item.email_sent_date %}\n(вже відправлявся {{ item.email_sent_date }}){% endif %}')">
             <button type="submit" class="btn btn-sm btn-ghost"
