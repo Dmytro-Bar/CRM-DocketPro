@@ -23,7 +23,7 @@ from email_handler import (send_email, email_configured,
                             body_invoice, body_reminder,
                             EMAIL_FROM_NAME)
 from config import CONTRACTS_DIR, TMP_DIR
-from routers.sig_utils import apply_signature_to_pdf
+from routers.sig_utils import apply_signature_to_pdf, get_sig_settings
 _DOCS_OK = True
 
 router = APIRouter(prefix="/invoices")
@@ -83,6 +83,7 @@ def _generate_invoice_pdf(invoice_no: str) -> Optional[str]:
         "sum_str":           _app_fmt_money(sum_uah),
         "sum_words":         inv["sum_words"] or amount_to_words_uah(sum_uah),
         "sum_uah":           sum_uah,
+        "sig_path":          get_sig_settings().get("sig_path", ""),
     }
 
     try:

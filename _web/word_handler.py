@@ -79,11 +79,68 @@ def _replace_in_paragraph(para, replacements: dict):
             t.text = ''
 
 
+def _inject_signature_image(doc, sig_path: str, width_cm: float = 4.5) -> bool:
+    """Знаходить параграф з {{ПІДПИС}} і замінює його зображенням підпису.
+
+    Повертає True якщо плейсхолдер знайдено і замінено.
+    Шукає у тілі документа, таблицях, хедері та футері.
+    """
+    from docx.shared import Cm
+
+    SIG_TAG = '{{ПІДПИС}}'
+
+    def _try_para(para) -> bool:
+        # Зібрати весь текст параграфа через w:t (охоплює і гіперпосилання)
+        full = ''.join(t.text or '' for t in para._element.iter(qn('w:t')))
+        if SIG_TAG not in full:
+            return False
+
+        p_elem = para._element
+        # Видалити всі runs (w:r) та гіперпосилання (w:hyperlink) з параграфа
+        for tag in ('w:r', 'w:hyperlink'):
+            for child in list(p_elem.findall(qn(tag))):
+                p_elem.remove(child)
+
+        # Додати новий run із зображенням
+        run = para.add_run()
+        run.add_picture(sig_path, width=Cm(width_cm))
+        return True
+
+    # Тіло документа
+    for para in doc.paragraphs:
+        if _try_para(para):
+            return True
+
+    # Таблиці
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    if _try_para(para):
+                        return True
+
+    # Хедер / Футер
+    for section in doc.sections:
+        for para in section.header.paragraphs:
+            if _try_para(para):
+                return True
+        for para in section.footer.paragraphs:
+            if _try_para(para):
+                return True
+
+    return False
+
+
 def fill_template(template_path: str, replacements: dict,
-                  out_filename: str) -> str:
+                  out_filename: str,
+                  sig_path: str = "",
+                  sig_width_cm: float = 4.5) -> str:
     """
     Заповнює шаблон Word і зберігає в TMP_DIR.
     Повертає шлях до збереженого .docx файлу.
+
+    sig_path    — якщо вказано і файл існує, замінює {{ПІДПИС}} на зображення.
+    sig_width_cm — ширина підпису в сантиметрах (висота масштабується автоматично).
     """
     os.makedirs(TMP_DIR, exist_ok=True)
     doc = Document(template_path)
@@ -105,6 +162,10 @@ def fill_template(template_path: str, replacements: dict,
             _replace_in_paragraph(para, replacements)
         for para in section.footer.paragraphs:
             _replace_in_paragraph(para, replacements)
+
+    # Вставка підпису (тільки якщо шаблон містить {{ПІДПИС}})
+    if sig_path and os.path.exists(sig_path):
+        _inject_signature_image(doc, sig_path, sig_width_cm)
 
     out_path = os.path.join(TMP_DIR, out_filename)
     doc.save(out_path)
@@ -204,7 +265,8 @@ def generate_invoice_access(data: dict) -> str:
         "{{DISCOUNT_LINE}}":   discount_line,
     }
     filename = f"Рахунок_{data['invoice_no']}.docx"
-    return fill_template(TEMPLATE_INVOICE_ACCESS, replacements, filename)
+    sig_path = data.get("sig_path", "")
+    return fill_template(TEMPLATE_INVOICE_ACCESS, replacements, filename, sig_path=sig_path)
 
 
 def generate_invoice_hourly(data: dict) -> str:
@@ -223,7 +285,8 @@ def generate_invoice_hourly(data: dict) -> str:
         "{{DUE_DATE}}":         data["due_date_str"],
     }
     filename = f"Рахунок_{data['invoice_no']}.docx"
-    return fill_template(TEMPLATE_INVOICE_HOURLY, replacements, filename)
+    sig_path = data.get("sig_path", "")
+    return fill_template(TEMPLATE_INVOICE_HOURLY, replacements, filename, sig_path=sig_path)
 
 
 # ============================================================
