@@ -27,6 +27,36 @@ templates.env.globals["norm"]      = norm
 templates.env.globals["pdf_url"]   = pdf_url
 
 
+def _users_from_invoice(inv, contract) -> int:
+    """Return the number of users as it was AT THE TIME the invoice was issued.
+
+    Calculates backwards from the invoice amount rather than reading the
+    current contract.users field (which may have been updated by a later
+    supplementary agreement / ДУ).
+
+    Formula: users = sum_uah / (tariff_uah_per_user × months × (1 − discount%))
+    Falls back to contract.users if arithmetic is impossible (zero tariff, etc.).
+    """
+    if not inv or not contract:
+        return int((contract or {}).get("users") or 1) if contract else 1
+
+    sum_uah      = float(inv["sum_uah"] or 0)
+    months       = max(1, int(inv["months"] or 1))
+    discount_pct = float(inv["discount_pct"] or 0)
+    tariff_fx    = float(contract["tariff_fx"] or 0)
+    fx_rate      = float(inv["fx_rate"] or 1) or 1
+    currency     = (contract["currency"] or "UAH").upper()
+
+    tariff_uah = tariff_fx if currency == "UAH" else tariff_fx * fx_rate
+
+    if tariff_uah <= 0:
+        return int(contract["users"] or 1)
+
+    factor = max(0.01, 1.0 - discount_pct / 100.0)
+    users = sum_uah / (tariff_uah * months * factor)
+    return max(1, round(users))
+
+
 def generate_act_no() -> str:
     today = date.today()
     prefix = "ACT-" + today.strftime("%d%m%Y")
@@ -261,7 +291,7 @@ async def preview_act(request: Request, act_no: str):
         "client_director":   (client_row["director"] or "") if client_row else "",
         "period_from_str":   act["period_from"] or "",
         "period_to_str":     act["period_to"] or "",
-        "users":             int(contract["users"] or 1) if contract else 1,
+        "users":             _users_from_invoice(inv, contract),
         "months":            int(inv["months"] or 1) if inv else 1,
         "hours":             hours,
         "hour_rate_str":     _app_fmt_money(hour_rate),
@@ -331,7 +361,7 @@ async def generate_pdf_act(act_no: str):
         "client_director":   (client_row["director"] or "") if client_row else "",
         "period_from_str":   act["period_from"] or "",
         "period_to_str":     act["period_to"] or "",
-        "users":             int(contract["users"] or 1) if contract else 1,
+        "users":             _users_from_invoice(inv, contract),
         "months":            int(inv["months"] or 1) if inv else 1,
         "hours":             hours,
         "hour_rate_str":     _app_fmt_money(hour_rate),
