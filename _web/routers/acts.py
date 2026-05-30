@@ -18,7 +18,6 @@ from word_handler import (generate_act_with_template, resolve_act_template,
 from config import CONTRACTS_DIR, TMP_DIR
 from email_handler import send_email, email_configured, body_act, EMAIL_FROM_NAME
 from utils import fmt_money as _app_fmt_money
-from routers.sig_utils import apply_signature_to_pdf
 _DOCS_OK = True
 
 router = APIRouter(prefix="/acts")
@@ -380,26 +379,6 @@ async def generate_pdf_act(act_no: str):
     return RedirectResponse(f"/acts/{act_no}/preview?saved=1", status_code=303)
 
 
-@router.post("/{act_no}/apply-signature")
-async def apply_signature_act(act_no: str, request: Request):
-    """Overlay the configured signature image onto the act PDF."""
-    with get_db() as db:
-        act = db.execute("SELECT pdf_path FROM acts WHERE act_no=?", (act_no,)).fetchone()
-
-    if not act or not act["pdf_path"]:
-        msg = "PDF акту не знайдено — спочатку згенеруйте PDF"
-        if request.headers.get("HX-Request"):
-            return HTMLResponse(f'<span style="color:var(--danger-fg)">{msg}</span>')
-        return HTMLResponse(msg, status_code=400)
-
-    ok, err = apply_signature_to_pdf(act["pdf_path"])
-
-    if request.headers.get("HX-Request"):
-        if ok:
-            return HTMLResponse('<span style="color:var(--success-fg)">✓ Підпис накладено</span>')
-        return HTMLResponse(f'<span style="color:var(--danger-fg)">{err}</span>')
-
-    return RedirectResponse("/acts", status_code=303)
 
 
 @router.post("/{act_no}/finalize")

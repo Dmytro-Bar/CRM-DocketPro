@@ -35,7 +35,6 @@ def _pdf_url(abs_path: str) -> str:
 
 # --- Routers ---
 from routers import dashboard, clients, contracts, invoices, acts, expenses, payments, app_payments, doc_templates, lyqpay, taxes
-from routers import settings_router
 
 BASE_DIR   = Path(__file__).parent
 PARENT_DIR = BASE_DIR.parent
@@ -52,11 +51,6 @@ if contracts_dir.exists():
 static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-# Uploaded files (signature image, etc.)
-uploads_dir = BASE_DIR / "uploads"
-uploads_dir.mkdir(exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # --- Jinja2 templates ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -106,4 +100,3 @@ app.include_router(app_payments.router)
 app.include_router(lyqpay.router)
 app.include_router(doc_templates.router)
 app.include_router(taxes.router)
-app.include_router(settings_router.router)

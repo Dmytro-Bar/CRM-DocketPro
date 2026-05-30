@@ -79,105 +79,11 @@ def _replace_in_paragraph(para, replacements: dict):
             t.text = ''
 
 
-def _inject_signature_image(doc, sig_path: str, width_cm: float = 2.0) -> bool:
-    """Знаходить {{ПІДПИС}} і замінює ТІЛЬКИ цей плейсхолдер на зображення.
-
-    Весь інший текст у параграфі залишається незайманим.
-    Шукає у тілі документа, таблицях, хедері та футері.
-    """
-    from docx.shared import Cm
-    from docx.oxml import OxmlElement
-
-    SIG_TAG = '{{ПІДПИС}}'
-
-    def _try_para(para) -> bool:
-        if SIG_TAG not in (para.text or ''):
-            return False
-
-        # Крок 1: шукаємо run де тег є цілком (найпоширеніший випадок)
-        for run in para.runs:
-            if SIG_TAG in run.text:
-                idx    = run.text.index(SIG_TAG)
-                before = run.text[:idx]
-                after  = run.text[idx + len(SIG_TAG):]
-
-                run.text = before                              # текст до підпису
-                run.add_picture(sig_path, width=Cm(width_cm)) # вставляємо підпис
-
-                if after:
-                    # Вставляємо текст після підпису як окремий run у XML
-                    new_r = OxmlElement('w:r')
-                    new_t = OxmlElement('w:t')
-                    new_t.text = after
-                    if after != after.strip():
-                        new_t.set(
-                            '{http://www.w3.org/XML/1998/namespace}space',
-                            'preserve')
-                    new_r.append(new_t)
-                    run._r.addnext(new_r)
-
-                return True
-
-        # Крок 2: тег розбитий між кількома runs — нормалізуємо
-        runs      = para.runs
-        full_text = ''.join(r.text for r in runs)
-        if SIG_TAG not in full_text:
-            return False
-
-        tag_start   = full_text.index(SIG_TAG)
-        tag_end     = tag_start + len(SIG_TAG)
-        before_text = full_text[:tag_start]
-        after_text  = full_text[tag_end:]
-
-        # Очищаємо всі runs (примусово — тег розбитий, не обійтись)
-        for run in runs:
-            run.text = ''
-
-        # Відновлюємо: before + зображення + after
-        anchor = runs[0] if runs else para.add_run()
-        anchor.text = before_text
-        anchor.add_picture(sig_path, width=Cm(width_cm))
-
-        if after_text:
-            para.add_run(after_text)
-
-        return True
-
-    # Тіло документа
-    for para in doc.paragraphs:
-        if _try_para(para):
-            return True
-
-    # Таблиці
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for para in cell.paragraphs:
-                    if _try_para(para):
-                        return True
-
-    # Хедер / Футер
-    for section in doc.sections:
-        for para in section.header.paragraphs:
-            if _try_para(para):
-                return True
-        for para in section.footer.paragraphs:
-            if _try_para(para):
-                return True
-
-    return False
-
-
 def fill_template(template_path: str, replacements: dict,
-                  out_filename: str,
-                  sig_path: str = "",
-                  sig_width_cm: float = 4.5) -> str:
+                  out_filename: str) -> str:
     """
     Заповнює шаблон Word і зберігає в TMP_DIR.
     Повертає шлях до збереженого .docx файлу.
-
-    sig_path    — якщо вказано і файл існує, замінює {{ПІДПИС}} на зображення.
-    sig_width_cm — ширина підпису в сантиметрах (висота масштабується автоматично).
     """
     os.makedirs(TMP_DIR, exist_ok=True)
     doc = Document(template_path)
@@ -199,10 +105,6 @@ def fill_template(template_path: str, replacements: dict,
             _replace_in_paragraph(para, replacements)
         for para in section.footer.paragraphs:
             _replace_in_paragraph(para, replacements)
-
-    # Вставка підпису (тільки якщо шаблон містить {{ПІДПИС}})
-    if sig_path and os.path.exists(sig_path):
-        _inject_signature_image(doc, sig_path, sig_width_cm)
 
     out_path = os.path.join(TMP_DIR, out_filename)
     doc.save(out_path)
@@ -302,8 +204,7 @@ def generate_invoice_access(data: dict) -> str:
         "{{DISCOUNT_LINE}}":   discount_line,
     }
     filename = f"Рахунок_{data['invoice_no']}.docx"
-    sig_path = data.get("sig_path", "")
-    return fill_template(TEMPLATE_INVOICE_ACCESS, replacements, filename, sig_path=sig_path)
+    return fill_template(TEMPLATE_INVOICE_ACCESS, replacements, filename)
 
 
 def generate_invoice_hourly(data: dict) -> str:
@@ -322,8 +223,7 @@ def generate_invoice_hourly(data: dict) -> str:
         "{{DUE_DATE}}":         data["due_date_str"],
     }
     filename = f"Рахунок_{data['invoice_no']}.docx"
-    sig_path = data.get("sig_path", "")
-    return fill_template(TEMPLATE_INVOICE_HOURLY, replacements, filename, sig_path=sig_path)
+    return fill_template(TEMPLATE_INVOICE_HOURLY, replacements, filename)
 
 
 # ============================================================

@@ -23,7 +23,6 @@ from email_handler import (send_email, email_configured,
                             body_invoice, body_reminder,
                             EMAIL_FROM_NAME)
 from config import CONTRACTS_DIR, TMP_DIR
-from routers.sig_utils import apply_signature_to_pdf, get_sig_settings
 _DOCS_OK = True
 
 router = APIRouter(prefix="/invoices")
@@ -83,7 +82,6 @@ def _generate_invoice_pdf(invoice_no: str) -> Optional[str]:
         "sum_str":           _app_fmt_money(sum_uah),
         "sum_words":         inv["sum_words"] or amount_to_words_uah(sum_uah),
         "sum_uah":           sum_uah,
-        "sig_path":          get_sig_settings().get("sig_path", ""),
     }
 
     try:
@@ -444,30 +442,6 @@ async def generate_pdf_invoice(invoice_no: str):
     """(Re)generate Word → PDF for an existing invoice. Used from preview page."""
     _generate_invoice_pdf(invoice_no)
     return RedirectResponse(f"/invoices/{invoice_no}/preview?saved=1", status_code=303)
-
-
-@router.post("/{invoice_no}/apply-signature")
-async def apply_signature_invoice(invoice_no: str, request: Request):
-    """Overlay the configured signature image onto the invoice PDF."""
-    with get_db() as db:
-        inv = db.execute(
-            "SELECT pdf_path FROM invoices WHERE invoice_no=?", (invoice_no,)
-        ).fetchone()
-
-    if not inv or not inv["pdf_path"]:
-        msg = "PDF рахунку не знайдено — спочатку згенеруйте PDF"
-        if request.headers.get("HX-Request"):
-            return HTMLResponse(f'<span style="color:var(--danger-fg)">{msg}</span>')
-        return HTMLResponse(msg, status_code=400)
-
-    ok, err = apply_signature_to_pdf(inv["pdf_path"])
-
-    if request.headers.get("HX-Request"):
-        if ok:
-            return HTMLResponse('<span style="color:var(--success-fg)">✓ Підпис накладено</span>')
-        return HTMLResponse(f'<span style="color:var(--danger-fg)">{err}</span>')
-
-    return RedirectResponse("/invoices", status_code=303)
 
 
 @router.post("/{invoice_no}/finalize")
