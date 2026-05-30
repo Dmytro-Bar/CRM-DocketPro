@@ -136,28 +136,14 @@
               </button>
             </form>
             {% endif %}
-            <form method="post" action="/acts/{{ r.act_no }}/sign">
-              <button class="btn btn-sm btn-ghost" style="color:var(--success-fg)" title="Підписано">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg>
-              </button>
-            </form>
           {% endif %}
           <a href="/acts/{{ r.act_no }}/edit" class="btn btn-sm btn-ghost" title="Редагувати" onclick="event.stopPropagation()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-          </a>
-          <a href="/acts/{{ r.act_no }}/preview" class="btn btn-sm btn-ghost" title="Переглянути документ" onclick="event.stopPropagation()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
           </a>
           {% if r.pdf_path %}
           <a href="{{ pdf_url(r.pdf_path) }}" target="_blank" class="btn btn-sm btn-ghost" title="PDF" onclick="event.stopPropagation()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
           </a>
-          <form method="post" action="/acts/{{ r.act_no }}/apply-signature"
-                onsubmit="event.stopPropagation()">
-            <button type="submit" class="btn btn-sm btn-ghost" title="Накласти підпис" style="color:var(--text-mute)" onclick="event.stopPropagation()">
-              ✍
-            </button>
-          </form>
           <form method="post" action="/acts/{{ r.act_no }}/send-email"
                 onsubmit="event.stopPropagation(); return confirm('Надіслати акт {{ r.act_no }} на email клієнта?{% if item.email_sent_date %}\n(вже відправлявся {{ item.email_sent_date }}){% endif %}')">
             <button type="submit" class="btn btn-sm btn-ghost"
