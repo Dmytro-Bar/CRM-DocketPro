@@ -302,7 +302,7 @@ async def create_contract(
     return RedirectResponse("/contracts", status_code=303)
 
 
-@router.get("/{contract_no}/edit", response_class=HTMLResponse)
+@router.get("/{contract_no:path}/edit", response_class=HTMLResponse)
 async def edit_contract_form(contract_no: str, request: Request, scan: str = ""):
     with get_db() as db:
         contract = db.execute(
@@ -319,7 +319,7 @@ async def edit_contract_form(contract_no: str, request: Request, scan: str = "")
     })
 
 
-@router.post("/{contract_no}/delete")
+@router.post("/{contract_no:path}/delete")
 async def delete_contract(contract_no: str):
     with get_db() as db:
         invoice_nos = [
@@ -335,7 +335,7 @@ async def delete_contract(contract_no: str):
     return RedirectResponse("/contracts", status_code=303)
 
 
-@router.post("/{contract_no}/edit")
+@router.post("/{contract_no:path}/edit")
 async def update_contract(
     contract_no:        str,
     edrpou:             str   = Form(...),
@@ -371,7 +371,7 @@ async def update_contract(
     return RedirectResponse("/contracts", status_code=303)
 
 
-@router.post("/{contract_no}/upload-scan")
+@router.post("/{contract_no:path}/upload-scan")
 async def upload_contract_scan(
     contract_no: str,
     scan_file: UploadFile = File(...),
@@ -414,7 +414,7 @@ def _amendment_scan_path(client_name: str, contract_no: str, du_no: str, ext: st
     return os.path.join(folder, f"ДУ_{_safe_folder(du_no)}{ext}")
 
 
-@router.get("/{contract_no}/amendments", response_class=HTMLResponse)
+@router.get("/{contract_no:path}/amendments", response_class=HTMLResponse)
 async def amendments_partial(request: Request, contract_no: str):
     """HTMX partial: list of amendments for a contract."""
     with get_db() as db:
@@ -436,7 +436,7 @@ async def amendments_partial(request: Request, contract_no: str):
     })
 
 
-@router.post("/{contract_no}/amendments/add")
+@router.post("/{contract_no:path}/amendments/add")
 async def add_amendment(
     request:        Request,
     contract_no:    str,
