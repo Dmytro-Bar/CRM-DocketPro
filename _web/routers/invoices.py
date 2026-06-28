@@ -1,6 +1,7 @@
 """Invoices router — list, create, update status."""
 
 import os
+import subprocess
 from datetime import date, timedelta
 from typing import Optional
 from urllib.parse import quote
@@ -120,6 +121,12 @@ def generate_invoice_no(for_date: date) -> str:
         except (ValueError, IndexError):
             pass
     return f"{prefix}-{str(max_n + 1).zfill(3)}"
+
+
+def _open_in_preview(pdf_path: Optional[str]) -> None:
+    """Open PDF in Apple Preview (macOS only). Silently ignored if path is empty."""
+    if pdf_path and os.path.exists(pdf_path):
+        subprocess.Popen(["open", "-a", "Preview", pdf_path])
 
 
 @router.get("", response_class=HTMLResponse)
@@ -357,8 +364,9 @@ async def create_invoice(
              ctype, months or None, users, discount_pct)
         )
 
-    # Generate PDF immediately — no preview step needed
-    _generate_invoice_pdf(inv_no)
+    # Generate PDF immediately and open in Preview for signing
+    pdf_path = _generate_invoice_pdf(inv_no)
+    _open_in_preview(pdf_path)
 
     return RedirectResponse("/invoices", status_code=303)
 
@@ -442,6 +450,18 @@ async def generate_pdf_invoice(invoice_no: str):
     """(Re)generate Word → PDF for an existing invoice. Used from preview page."""
     _generate_invoice_pdf(invoice_no)
     return RedirectResponse(f"/invoices/{invoice_no}/preview?saved=1", status_code=303)
+
+
+@router.get("/{invoice_no}/open-pdf")
+async def open_pdf_in_preview(invoice_no: str):
+    """Open the invoice PDF in Apple Preview for signing."""
+    with get_db() as db:
+        inv = db.execute(
+            "SELECT pdf_path FROM invoices WHERE invoice_no=?", (invoice_no,)
+        ).fetchone()
+    if inv and inv["pdf_path"]:
+        _open_in_preview(inv["pdf_path"])
+    return RedirectResponse("/invoices", status_code=303)
 
 
 @router.post("/{invoice_no}/finalize")
