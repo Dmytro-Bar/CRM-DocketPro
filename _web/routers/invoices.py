@@ -464,6 +464,17 @@ async def open_pdf_in_preview(invoice_no: str):
     return RedirectResponse("/invoices", status_code=303)
 
 
+@router.post("/{invoice_no}/unmark-paid")
+async def unmark_invoice_paid(invoice_no: str):
+    """Скасувати оплату рахунку — повернути статус «Не оплачено»."""
+    with get_db() as db:
+        db.execute(
+            "UPDATE invoices SET pay_status='Не оплачено', pay_date=NULL WHERE invoice_no=?",
+            (invoice_no,)
+        )
+    return RedirectResponse("/app-payments", status_code=303)
+
+
 @router.post("/{invoice_no}/finalize")
 async def finalize_invoice(request: Request, invoice_no: str):
     """Конвертує відредагований DOCX у PDF та зберігає в папку клієнта."""
