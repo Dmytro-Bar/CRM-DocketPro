@@ -146,6 +146,24 @@ async def create_payment(
     return RedirectResponse("/app-payments", status_code=303)
 
 
+@router.post("/{payment_id}/edit")
+async def edit_payment(
+    payment_id:  int,
+    pay_date:    str   = Form(...),
+    amount:      float = Form(...),
+    currency:    str   = Form("UAH"),
+    description: str   = Form(""),
+    source:      str   = Form("lyqpay"),
+):
+    with get_db() as db:
+        db.execute(
+            "UPDATE app_payments SET pay_date=?,amount=?,currency=?,description=?,source=? "
+            "WHERE id=?",
+            (pay_date, amount, currency, description.strip(), source, payment_id)
+        )
+    return RedirectResponse("/app-payments", status_code=303)
+
+
 @router.post("/{payment_id}/delete")
 async def delete_payment(payment_id: int):
     with get_db() as db:
