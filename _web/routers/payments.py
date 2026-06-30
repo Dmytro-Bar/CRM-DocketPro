@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from database import get_db
-from models import fmt_money, fmt_date
+from models import fmt_money, fmt_date, parse_date
 
 import mono_client as mc
 
@@ -195,16 +195,31 @@ async def fetch_from_api(
         })
 
 
+def _safe_mark_paid(db, invoice_no: str, pay_date: str) -> bool:
+    """Mark invoice as paid only if pay_date >= invoice_date. Returns True if updated."""
+    inv = db.execute(
+        "SELECT invoice_date FROM invoices WHERE invoice_no=?", (invoice_no,)
+    ).fetchone()
+    if not inv:
+        return False
+    inv_date = parse_date(inv["invoice_date"])
+    pd       = parse_date(pay_date)
+    if inv_date and pd and pd < inv_date:
+        return False  # pay_date is before invoice was issued — skip
+    db.execute(
+        "UPDATE invoices SET pay_status='Оплачено', pay_date=? WHERE invoice_no=?",
+        (pay_date, invoice_no)
+    )
+    return True
+
+
 @router.post("/mark-paid")
 async def mark_invoice_paid(
     invoice_no: str = Form(...),
     pay_date:   str = Form(...),
 ):
     with get_db() as db:
-        db.execute(
-            "UPDATE invoices SET pay_status='Оплачено', pay_date=? WHERE invoice_no=?",
-            (pay_date, invoice_no)
-        )
+        _safe_mark_paid(db, invoice_no, pay_date)
     return RedirectResponse("/payments", status_code=303)
 
 
@@ -212,7 +227,6 @@ async def mark_invoice_paid(
 async def mark_paid_bulk(request: Request):
     form  = await request.form()
     pairs = []
-    # form fields: invoice_no_0, pay_date_0, invoice_no_1, pay_date_1, ...
     i = 0
     while True:
         inv_no   = form.get(f"invoice_no_{i}")
@@ -225,8 +239,5 @@ async def mark_paid_bulk(request: Request):
     if pairs:
         with get_db() as db:
             for (pay_date, inv_no) in pairs:
-                db.execute(
-                    "UPDATE invoices SET pay_status='Оплачено', pay_date=? WHERE invoice_no=?",
-                    (pay_date, inv_no)
-                )
+                _safe_mark_paid(db, inv_no, pay_date)
     return RedirectResponse("/payments", status_code=303)
